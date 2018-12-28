@@ -1,0 +1,22 @@
+In order to use the GPU debugger more efficiently I had to enable some compiler flags prior to
+compiling the shaders. I set up a way to compile the shaders seperately, this compilation is
+handled by a seperate build.bat file. This bat file is in turn called in the main build bat, if
+the user calls build.bat with 's' as a command line argument:
+  build.bat s     (will build the program and the shaders in debug mode)
+  build.bat r s   (will build the program and the shaders in release mode)
+
+Using the GPU debugger I found out that the pixel shader was not run at all, this due to that 
+the vertex shader didn't produce any output.
+
+Turns out that if I disable the depth testing, then the triangle will render. This made me
+realise that I never clear the depth and stencil buffer! D'oh! After adding this, the triangle
+renders correctly:
+  Device->ClearDepthStencilView(DepthStencilView, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1, 0);
+
+Summary:
+- The canonical view volume has coordinates: x E [-1.0, 1.0], y E [-1.0, 1.0], z E [0.0, 1.0] and the origin
+  is at (0.0, 0.0, 0.0)
+- The default is that the vertices should be in clockwise order
+
+
+  

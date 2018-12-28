@@ -1,0 +1,16 @@
+OOP, standard library
+First version 
+
+Regarding the OOP design
+------------------------
+At first, I created a class that both run the algorithm and rendered the result. I wanted to have a cross-
+platform solution that was easy and not too cumbersome so I chosed SDL2. Didn't put to much effort in this
+choice, might revise it later (seems like SDL2 isn't neccessarily super-efficient?).
+  SDL2 has a coordinate system with the origin in the upper left (I prefer in the bottom left).
+
+I chosed to break it down to two classes, one base class that handles everything regarding the algorithm
+itself, and a second one that inherits from the base class and extends it with rendering capabilities (SDL2).
+  I also chosed to divide them into two seperate files. I usually prefer to not having too many small files,
+but in this case it seemed to be the correct structure (makes it easier to read).
+  The division into two classes makes a lot of sense, since when I will use Marching squares in the future I 
+will most likely not use SDL2 for the rendering.

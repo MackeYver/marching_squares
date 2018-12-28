@@ -1,0 +1,28 @@
+Still working on the version that uses OOP and the standard library. Changed from using a pointer to a float array
+to using a std::vector owned by the class. Will probably go all-in on c++ and make it into a template class (in
+order to support data as both float and int).
+
+Added the capability to load data from a text file. Currently only supporting a text file with values seperated by
+a space. Will mayby enchance this and support a better format in the future. It will also be handled by the class
+itself rather than be done outside as it is now.
+
+Goals:
+- Load data from a file or from a in-memory POD array or std::vecor
+- Support float and int (template?) 
+
+
+Re-structured the oop_std files in order to make them easier to read. Also implemented the copy-constructor and
+the assignment operator to the _SDL class ("rule of three").
+Created a test .txt file to use for testing.
+
+Reading data from filed resulted in a size that was one greater than expected. Turns out there was a bug in the
+loop that read data from the file and pushed it to the vector. The file was not put in eof state until the
+program tried to read past the eof, thus we were adding the last data twice. This since the feof(file) was in the
+while statement and the adding vector inside the brackets, causing us to read and fail but still add to the
+vector. An if statement just before we add data solved the problem:
+  if (feof(file))  break;
+
+Finally were able to run the test on the test data (volcano dataset) and it worked -- cool. (See image #1).
+However, it looks like it has been rotated in comparison to images from the source. Probably the data in the file
+that is saved differently than what I thought.
+(source: http://geomorphometry.org/content/volcano-maungawhau).

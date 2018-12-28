@@ -1,0 +1,26 @@
+I didn't reach my goal yesterday so that goal will be remain today: render a triangle on the screen.
+
+I have looked into compiling shaders and how to do that. I will start with very simple shaders and
+the simplest of simple workflows: writing the shader into a String literal and compile that. The
+logical solution for the future would be to setup a offline rendering workflow using FXC.exe. It
+seems to be quite easy actually (famous last words). But that is for later, now: stringified shaders!
+
+Now I have written, compiled and created the shaders. Nothing troublesome here really, actually not
+weird or complicated at all. Finally, let the rendering commence!
+
+Turns out that I was wrong... I need to define and set a vertex layout first, jösses -- it is a lot
+of work to initialize DirectX.
+
+
+
+##Troubleshooting graphics
+------------------------
+Well, I got everything to compile and I am -- probably -- setting everything that needs setting, 
+but alas, the program rendered no triangle! Rendering paused, troubleshooting commenced...
+
+I checked my vertices, do they have the wrong winding? Unverified sources tells me that the default
+winding in DirectX is clockwise, but changing into that has no effect.
+
+The Graphics Debugger in Visual Studio seems to be not all bad, I just need to set some flags when
+I compile the shaders.
+

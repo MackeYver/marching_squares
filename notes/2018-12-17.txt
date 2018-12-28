@@ -1,0 +1,43 @@
+#Viewport
+--------
+D3d10_VIEWPORT is easy to setup and use: D3D10Device->SetViewports(n, *viewports); Doesn't 
+affect the ClearRenderTargetView, but that does make a lot of sense, I guess that it will 
+only affect the output from the geometry stage/shader.
+
+Today I will take start with creating a depth and a stencil buffer followed by a closer 
+look at shaders. I will hopefully be able to render a triangle before the day is over.
+
+
+
+##Sidequest
+----------
+But first, depth and stencil buffers.
+  Looking into the creation of said buffers I found two different verions of the structs
+describing 2d textures:
+  CD3D10_TEXTURE2D_DESC and D3D10_TEXTURE2D_DESC.
+I found it to be a bit weird to be honest, the CD3D10 seems to inherit from the D3D10_ 
+struct; not sure of why. Perhaps for sake of convenience? It seem to have a couple
+of constructors and a destructor, but it's unclear what the destructor does -- the
+help-page seems to be a bit broken.
+
+Using the D3D10_DEPTH_STENCIL_VIEW_DESC, I needed to set the Texture2D.MipSlice = 0. 
+The documentation for D3D10_DEPTH_STENCIL_VIEW_DESC is a bit.. lacking. In general, 
+it seems to me that the quality of the DirectX 10 documentation is low, especially in
+comparison to DirectX 11 -- which seems to be almost decent.
+
+The debug information is kind of cool, ReportLiveObjects() reminded me that I also need
+to release all the resources used in connection with the depth and stencil stuff.
+  When updating the cleanup code, I noted that in the documentation about DepthStencilState,
+the following is stated:
+  "The method will not hold a reference to the interfaces passed in. For that reason, 
+  applications should be careful not to release an interface currently in use by the device."
+Due to this, I first call Device->OMSetDepthStencilState(nullptr, 1) in order to tell
+the device to not use the DepthStencilState. First after that, I release the state.
+
+Phew, it is a lot of work to setup DirectX!
+
+
+
+
+
+

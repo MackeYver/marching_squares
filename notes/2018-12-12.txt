@@ -1,0 +1,8 @@
+Bought a new computer (yay!) and I have gone back to Windows. Exciting! I will start to use DirectX and will remove SDL 
+(I wasn't particulary pleased with it to be honest).
+Trying to figure out which version of DirectX I should use in order to maximize the user base; based on Steam's hardware
+and software survey, it seems like DirectX 10 will reach most users (~99.8%, DX10 and Vista).
+
+I will try to link to D3D10.lib (doesn't look like I will need 10.1); I honestly don't know if this is a good idea 
+or not. My ambition is to reach as many people as possible and to minimize the amount of dependencies.
+For this project a minimal feature set is enough, and for my planned future projects that will also be enough.

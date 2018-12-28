@@ -1,0 +1,125 @@
+#Working on initializing DirectX 10
+----------------------------------
+
+This notes are written as I go along so they are hastily put together. Spelling
+and grammar will probably be of low quality -- you have my sincerest apologies!
+
+Got an error when creating the SwapChain:
+    HRESULT Result = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)(&Factory));
+    if (Result != S_OK)
+    {
+        // TODO(Marcus): Add better error handling
+        OutputDebugString(L"Failed to create DXGIFactory!\n");
+        return 0;
+    }
+        
+    Result = Factory->CreateSwapChain(D3DDevice, &SwapChainDesc, &SwapChain);
+    if (Result != S_OK)
+    {
+        // TODO(Marcus): Add better error handling
+        OutputDebugString(L"Failed to create the swap chain!\n");
+        return 0;
+    }
+            
+The error code I received was E_INVALIDARG which seems to indicate that I'm supplying an invalid
+parameter to the CreateFactory. But checking the parameters I supplied, I didn't find any obvious
+error. In order to get more information about the error I set the flag D3D10_CREATE_DEVICE_DEBUG
+when creating the D3D10 device (only in the debug build, I used #ifdef to make sure of this).
+  This resulted in that I found out that "the device doesn't support DXGI_FORMAT_B8G8R8A8_UNORM"
+which seems weird due to that my GPU is of a rather new model. I recalled that the documentation
+mentioned something about BGRA support, and I totally forgot that I commented on this earlier
+(thanks brain).
+I tried to add the flag D3D10_CREATE_DEVICE_BGRA_SUPPORT to the creation of the D3D device, but it
+didn't help. Perhaps I need to create a D3D 10.1 device after all? Unfortunately it doesn't seem
+like I can safely assume that a user's hardware that support DX10 also supports DX10.1.
+Options:
+  1. Use DX 10.1
+    - This will decrease the user base but I don't know how much
+
+  2. Switch to DX 11
+    - According to Steam's Hardware survey, this will decrease the user base with ~4%
+
+  3. Check if the hardware support BGRA and if not, use another format
+     - Added complexity (not much but still more complex than before)
+
+  4. Use another format (RGBA)
+     - No added complexity but potentially degrading performance?
+
+The reason for me trying to use BGRA is that it seems like this is the format used by Windows?
+Several sources mention this but I haven't confirmed this yet.
+
+For now I chose option #4, I will use RGBA format instead. I will revisit this if necessary.
+
+
+
+#Un-released objects
+-------------------
+Checking the debug output after the program closes lead me to believe that we have a lot of
+objects that are not released properly. In order to get better information about what's going
+on, I decided to use ReportLiveObjects(). This is not available by default, unless you are
+building a Windows 8 app of some sort -- which we are not doing. So, I use GetProcAddress
+in order to get the address of the needed function:
+        HMODULE hModule = GetModuleHandleA("Dxgidebug.dll");
+        if (!hModule) {
+            OutputDebugString(L"Failed to get module handle to Dxgidebug.dll\n");
+            return 1;
+        }
+        
+        typedef HRESULT (*GETDEBUGINTERFACE)(REFIID, void **);
+        GETDEBUGINTERFACE GetDebugInterface;
+        GetDebugInterface = (GETDEBUGINTERFACE)GetProcAddress(hModule, "DXGIGetDebugInterface");
+        
+        HRESULT Result = GetDebugInterface(__uuidof(IDXGIDebug), (void **)&DebugInterface);
+        if (Result != S_OK)
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to get the debug interface!\n");
+            return 1;
+        }
+
+  Turns out that all that was needed was to also release the backbuffer (which I apparently
+forgot to do)...
+Doing so, led to ReportLiveObjects didn't print anything and there is no message after the
+end of the program.
+
+
+
+#A scale and a manifest
+----------------------
+Looking closely at the rendered window -- basically taking a screenshot and inspecting it mspaint,
+I could see that the size of window was wrong. I'm developing on a 4k monitor (the text rendering
+is amazing) and have set Windows to scale GUI and text by 150%. Since I set the size to be
+1024x1024, I expected the window's client area to have a size of 1024. But it was 50% bigger,
+which seemed to indicate that it was indeed scaled.
+  Looking at the size of the buffer (1024x1024), and the reported size of the window (1024x1024),
+I suspected that Windows will be scaling when blitting to the window; i.e. the rendered content will
+probably be stretched.
+
+Reading through the documentation, looking for some way to prevent Windows from scaling the client
+area, I stumbled upon references to "the manifest file". I don't believe that I've heard about them
+before this, so that was interesting. It was a very long time since I last did any development on
+Windows. Apparently, a manifest file contains information about the application and can be used in
+some different ways, on way is to embed the file in the exe.
+
+I chose to embed a hacked together manifest file into the exe file. I changed my build.bat so that
+the linker didn't produce any manifest file (/MANIFEST:NO, but it seemed like it actually didn't
+produce a manifest earlier either) and added a post-build step in that bat file.
+  mt.exe -manifest "path_to_manifest_file" -outputresource:"path_to_exe"
+
+The manifest file itself is a bit of a "Frankenstein's manifest file"; I duct-taped it together using
+msdn and some internet searches. The important parts were:
+  <asmv3:application xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+    <asmv3:windowsSettings xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">system</dpiAwareness>
+      <dpiAware>True</dpiAware>
+    </asmv3:windowsSettings>
+  </asmv3:application>
+
+To verify the result in another way as well, I stepped through the code and checked which resolution
+Windows reported with <dpiAware> and without. I used:
+  GetSystemMetrics(SM_CXSCREEN);
+With <dpiAware> I got the correct resolution, 4k -- but without it I got other values which verifies
+that it worked. Yay!
+
+Well, now the window actually seems to be a bit small..? Like, the width is somewhere around 1004 instead
+of 1024. I need to investigate this some more, but that will have to wait for another day.

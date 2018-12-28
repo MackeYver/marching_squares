@@ -1,0 +1,28 @@
+Working on the inner loop of the algorithm (in "march_squares()" in oop_std.cpp), the "heart" of the algorithm.
+I am probably guilty of doing a bit of optimization before having data that supports my decisions, but I really
+want at good structure from the start. 
+  I made the loop a bit more explicit regarding which points that are added in the different cases. I'm striving
+to make the code easy to ready but also efficient to execute.
+
+The result so far seems to be correct without any interpolation (currently all the lines are going through the
+center of each cell's edge). But the results with interpolation enabled are wrong (se screenshot #1 and #2, in 
+which #2 is using interpolation).
+
+In order to find the bug I started with stepping through the code, but since there are a lot of data points
+it feels like finding a needle in a haystack. I need to narrow it down a bit, to have some more information
+about which circumstances the error(s) occurs.
+  I switched to using printf debugging, printing the values of the interpolation to the console and since I 
+always are doing four interpolations per data point (this will most likely be optimized in the future), I also
+grouped the printf statements in groups of four. 
+  The error appeared immediately; if I had stepped through the code for just some more data points I would have
+found it. The printed values in the console contains -inf, +inf and nan. I am doing divisions so it looks like 
+the denominator is zero for some cases.
+
+This is weird, it shouldn't really happen -- in some cases the denominator will definitively be zero, but those 
+cases are not the ones that we use, so it shouldn't matter. 
+  After checking the code I found that I hade mistyped one of the cases; it used the wrong points and was thus
+using points in which one of the components was the result of an invalid division.
+
+According to IEEE 754, the floating point standard used, division with zero will be +INF or -INF for floats, so the
+program will not crash -- we don't need to guard against this and since we shouldn't use the result from those
+cases we should be alright.
