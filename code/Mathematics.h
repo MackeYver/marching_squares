@@ -19,6 +19,7 @@
 // Typedefs
 typedef uint8_t u8;
 typedef uint32_t u32;
+typedef uint64_t u64;
 
 #define f32Max FLT_MAX
 #define f32Min FLT_MIN
@@ -181,7 +182,7 @@ union line_segment {
     v2 P[2];
 };
 
-inline line_segment Line_segment(v2 const& A, v2 const& B) {
+inline line_segment LineSegment(v2 const& A, v2 const& B) {
     line_segment Result;
     Result.P0 = A;
     Result.P1 = B;
@@ -189,7 +190,7 @@ inline line_segment Line_segment(v2 const& A, v2 const& B) {
     return Result;
 }
 
-inline line_segment Line_segment(f32 x0, f32 y0, f32 x1, f32 y1) {
+inline line_segment LineSegment(f32 x0, f32 y0, f32 x1, f32 y1) {
     line_segment Result;
     Result.P0 = V2(x0, y0);
     Result.P1 = V2(x1, y1);
@@ -292,6 +293,215 @@ inline v3 NOZ(v3 const& A) {
         Result = A * (1.0f / SquareRoot(l));
     }
     
+    return Result;
+}
+
+
+
+//
+// v4
+#define v4_zero V4(0.0f, 0.0f, 0.0f, 0.0f)
+#define v4_one  V4(1.0f, 1.0f, 1.0f, 1.0f)
+
+union v4 {
+    struct {
+        f32 x;
+        f32 y;
+        f32 z;
+        f32 w;
+    };
+    f32 E[4];
+};
+
+inline v4 V4(f32 x, f32 y, f32 z, f32 w) {
+    v4 Result = 
+    {
+        x, y, z, w
+    };
+    return Result;
+}
+
+//
+// v4 vs v4
+inline v4 operator + (v4 const& A, v4 const& B) {
+    v4 Result = V4(A.x + B.x, A.y + B.y, A.z + B.z, A.w + B.w);
+    return Result;
+}
+
+inline v4 operator - (v4 const& A, v4 const& B) {
+    v4 Result = V4(A.x - B.x, A.y - B.y, A.z - B.z, A.w - B.w);
+    return Result;
+}
+
+inline v4 Hadamard(v4 const& A, v4 const& B) {
+    v4 Result = V4(A.x * B.x, A.y * B.y, A.z * B.z, A.w * B.w);
+    return Result;
+}
+
+inline f32 Dot(v4 const& A, v4 const& B) {
+    f32 Result = A.x * B.x + A.y * B.y + A.z * B.z + A.w * B.w;
+    return Result;
+}
+
+
+//
+// v4 vs f32
+inline v4 operator * (v4 const& A, float const& b) {
+    v4 Result = V4(A.x * b, A.y * b, A.z * b, A.w * b);
+    return Result;
+}
+
+inline v4 operator * (float const& b, v4 const& A) {
+    v4 Result = A * b;
+    return Result;
+}
+
+//
+// v4 unary
+inline v4 operator - (v4 const& A) {
+    v4 Result = V4(-A.x, -A.y, -A.z, -A.w);
+    return Result;
+}
+
+inline f32 LengthSq(v4 const& A) {
+    f32 Result = A.x * A.x + A.y * A.y + A.z * A.z + A.w * A.w;
+    return Result;
+}
+
+inline f32 Length(v4 const& A) {
+    f32 Result = SquareRoot(A.x * A.x + A.y * A.y + A.z * A.z + A.w * A.w);
+    return Result;
+}
+
+inline v4 Normalize(v4 const& A) {
+    v4 Result = A * (1.0f / Length(A));
+    return Result;
+}
+
+// Normalize or zero
+inline v4 NOZ(v4 const& A) {
+    v4 Result = {};
+    
+    f32 L = LengthSq(A);
+    if(L > Square(0.0001f)) {
+        Result = A * (1.0f / SquareRoot(L));
+    }
+    
+    return Result;
+}
+
+
+
+//
+// Matrix
+//
+
+//
+// m4
+union m4
+{
+    // Stored in column-major order
+    // mRC: R = Row, C = Column, i.e. m01 = row 0, column 1
+    struct
+    {
+        f32 m00, m10, m20, m30;
+        f32 m01, m11, m21, m31;
+        f32 m02, m12, m22, m32;
+        f32 m03, m13, m23, m33;
+    };
+    struct
+    {
+        f32 _00, _01, _02, _03;
+        f32 _04, _05, _06, _07;
+        f32 _08, _09, _10, _11;
+        f32 _12, _13, _14, _15;
+    };
+    struct 
+    {
+        f32 Xx, Xy, Xz, Xw;
+        f32 Yx, Yy, Yz, Yw;
+        f32 Zx, Zy, Zz, Zw;
+        f32 Wx, Wy, Wz, Ww;
+    };
+    struct 
+    {
+        v4 X, Y, Z, W;
+    };
+    
+    f32 E[16];
+    v4  C[4];
+    
+    inline v4 Column(u32 Index)
+    {
+        return C[Index];
+    }
+    
+    inline v4 Row(u32 Index)
+    {
+        v4 Result = {E[0 + Index], E[4 + Index], E[8 + Index], E[12 + Index]};
+        
+        return Result;
+    }
+};
+
+inline m4 M4(v4 X, v4 Y, v4 Z)
+{
+    m4 Result =
+    {
+        X.x , X.y , X.z , X.w,
+        Y.x , Y.y , Y.z , Y.w,
+        Z.x , Z.y , Z.z , Z.w,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    return Result;
+}
+
+inline m4 M4(v4 X, v4 Y, v4 Z, v4 W)
+{
+    m4 Result =
+    {
+        X.x , X.y , X.z , X.w,
+        Y.x , Y.y , Y.z , Y.w,
+        Z.x , Z.y , Z.z , Z.w,
+        W.x , W.y , W.z , W.w,
+    };
+    return Result;
+}
+
+#define m4_identity {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f}
+
+inline m4 Transpose(m4 *A)
+{
+    m4 Result = {
+        A->Xx, A->Yx, A->Zx, A->Wx,
+        A->Xy, A->Yy, A->Zy, A->Wy,
+        A->Xz, A->Yz, A->Zz, A->Wz,
+        A->Xw, A->Yw, A->Zw, A->Ww
+    };
+    
+    return Result;
+}
+
+inline m4 operator * (m4& A, m4& B)
+{
+    m4 Result;
+    for (int Col = 0; Col < 4; ++Col) 
+    {
+        for (int Row = 0; Row < 4; ++Row) 
+        {
+            Result.E[(4 * Col) + Row] = Dot(A.Row(Row), B.C[Col]);
+        }
+    }
+    return Result;
+}
+
+inline v4 operator * (m4& A, v4& B)
+{
+    v4 Result;
+    for (int Row = 0; Row < 4; ++Row) 
+    {
+        Result.E[Row] = Dot(A.Row(Row), B);
+    }
     return Result;
 }
 

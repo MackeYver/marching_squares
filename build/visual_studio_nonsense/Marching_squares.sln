@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.136
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{911E67C6-3D85-4FCE-B560-20A9C3E3FF48}") = "Marching_squares", "..\Marching_squares.exe", "{13ACACA2-B480-4B14-A5CA-DB25DCE6BEF1}"
+Project("{911E67C6-3D85-4FCE-B560-20A9C3E3FF48}") = "Marching_squares", "..\Marching_squares.exe", "{EA8A6F37-7084-4301-A260-412F989CEB9F}"
 	ProjectSection(DebuggerProjectSystem) = preProject
 		PortSupplier = 00000000-0000-0000-0000-000000000000
 		Executable = C:\developer\Marching_squares\build\Marching_squares.exe
@@ -21,12 +21,12 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{13ACACA2-B480-4B14-A5CA-DB25DCE6BEF1}.Release|x86.ActiveCfg = Release|x86
+		{EA8A6F37-7084-4301-A260-412F989CEB9F}.Release|x86.ActiveCfg = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {0A0D5DE4-C977-469C-995B-5077CEA75413}
+		SolutionGuid = {FEA6A09E-4B38-4020-8B54-73DD7EE764E6}
 	EndGlobalSection
 EndGlobal

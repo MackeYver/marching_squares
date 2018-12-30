@@ -1,8 +1,8 @@
 //
 // Vertex shader
-float4 vMain(float3 P : POSITION) : SV_POSITION
+float4 vMain(float2 P : POSITION) : SV_POSITION
 {
-	float4 Ph = {P.x, P.y, P.z, 1.0f};
+	float4 Ph = {P.x, P.y, 0.0f, 1.0f};
 	return Ph;
 }
 

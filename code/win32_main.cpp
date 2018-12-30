@@ -16,8 +16,10 @@
 #endif
 
 #include <assert.h>
+#include <cctype>
 
 #include "Mathematics.h"
+#include "oop_std.h"
 
 
 #include <stdio.h>
@@ -117,6 +119,94 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         }
     }
     
+    
+    //
+    // Read data from file
+    u32 *Data = nullptr;
+    u32 DataCount = 0;
+    {
+        HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\test.txt",
+                                  GENERIC_READ,
+                                  FILE_SHARE_READ,
+                                  nullptr,
+                                  OPEN_EXISTING,
+                                  FILE_ATTRIBUTE_NORMAL,
+                                  nullptr);
+        if (File == INVALID_HANDLE_VALUE)
+        {
+            DWORD Error = GetLastError();
+            DebugPrint(L"Failed to open file, error: %d\n", Error);
+            return 1;
+        }
+        
+        LARGE_INTEGER FileSize;
+        GetFileSizeEx(File, &FileSize);
+        assert(FileSize.QuadPart > 0);
+        
+        char *FileData = (char *)malloc((size_t)FileSize.QuadPart);
+        assert(FileData);
+        
+        DWORD BytesRead = 0;
+        if (!ReadFile(File, FileData, (DWORD)FileSize.QuadPart, &BytesRead, nullptr) || BytesRead != FileSize.QuadPart)
+        {
+            CloseHandle(File);
+            DWORD Error = GetLastError();
+            DebugPrint(L"Failed to read from file, error: %d", Error);
+            return 1;
+        }
+        
+        CloseHandle(File);
+        
+        // Count the number of elements
+        u32 SpaceCount = 0;
+        for (u8 Index = 0; Index < FileSize.QuadPart; ++Index)
+        {
+            if (FileData[Index] == ' ' || FileData[Index] == '\n')  ++SpaceCount;
+        }
+        
+        DataCount = SpaceCount + 1; // We're assuming that there is only spaces in between the elements
+        Data = (u32 *)malloc(DataCount * sizeof(u32));
+        assert(Data);
+        
+        // Proccess the read data, i.e. convert to u32
+        u32 DataIndex = 0;
+        for (u32 Index = 0; Index < FileSize.QuadPart;)
+        {
+            if (!isdigit(FileData[Index]))  continue;
+            
+            char SmallBuffer[10] = {};
+            
+            u32 EndIndex = Index;
+            while (EndIndex < FileSize.QuadPart && FileData[EndIndex] != ' ' && FileData[EndIndex] != '\n') {
+                ++EndIndex;
+            }
+            
+            assert(EndIndex != Index);
+            assert(EndIndex - Index < 10);
+            
+            memcpy(SmallBuffer, &FileData[Index], EndIndex - Index);
+            sscanf_s(SmallBuffer, "%d", &Data[DataIndex++]);
+            
+            Index = EndIndex + 1;
+        }
+        assert(DataIndex == DataCount);
+        
+        free(FileData);
+        FileData = nullptr;
+    }
+    
+    
+    //
+    // Generate lines from data using Marching Squares
+    MarchingSquares::config Config;
+    Config.CellCountX = 11;
+    Config.CellCountY = 11;
+    Config.CellSize = V2((f32)(Width / Config.CellCountX), (f32)(Height / Config.CellCountY));
+    Config.SourceHasOriginUpperLeft = true;
+    
+    MarchingSquares MS(Data, DataCount, Config);
+    std::vector<f32> Heights = {1, 2, 3, 4, 5};
+    MS.MarchSquares(Heights);
     
     
     //
@@ -326,38 +416,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
-    
     //
     // Vertexbuffer
-    ID3D10Buffer *VertexBuffer;
+    u32 VertexBufferCount = MS.GetLevelCount();
+    assert(VertexBufferCount > 0);
+    
+    ID3D10Buffer **VertexBuffers;
+    VertexBuffers = (ID3D10Buffer **)malloc(VertexBufferCount * sizeof(ID3D10Buffer *));
+    assert(VertexBuffers);
+    
+    u32 *VertexCount;
+    VertexCount = (u32 *)malloc(VertexBufferCount * sizeof(u32));
+    assert(VertexCount);
+    
+    for (u32 Index = 0; Index < VertexBufferCount; ++Index)
     {
         // Assuming that the origin is in the center and the vertices are in clockwise order.
-        v3 TriangleVertices[] = {{-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
+        //v3 TriangleVertices[] = {{-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
+        
+        MarchingSquares::level *Level = MS[Index];
+        assert(Level);
+        size_t Size = Level->LineSegments.size() * sizeof(line_segment);
+        
+        VertexCount[Index] = 2 * Level->LineSegments.size();
         
         D3D10_BUFFER_DESC BufferDesc;
-        BufferDesc.ByteWidth = sizeof(TriangleVertices); // size of the buffer
+        BufferDesc.ByteWidth = Size;                     // size of the buffer
         BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
         BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
         BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
         BufferDesc.MiscFlags = 0;                        // No other option
         
         D3D10_SUBRESOURCE_DATA InitData;
-        InitData.pSysMem = TriangleVertices;
+        InitData.pSysMem = Level->LineSegments.data();
         InitData.SysMemPitch = 0;
         InitData.SysMemSlicePitch = 0;
         
-        HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &VertexBuffer);
+        HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &VertexBuffers[Index]);
         if (FAILED(Result)) 
         {
             // TODO(Marcus): Add better error handling
             OutputDebugString(L"Failed to create the Vertex buffer\n");
             return 1;
         }
-        
-        u32 const stride = sizeof(v3);
-        u32 const offset = 0;
-        Device->IASetVertexBuffers(0, 1, &VertexBuffer, &stride, &offset);
-        Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     }
     
     
@@ -370,7 +471,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     {
         // Open file
         FILE *ShaderFile;
-        fopen_s(&ShaderFile, "shaders/BasicVertexShader.cso", "rb");
+        fopen_s(&ShaderFile, "shaders\\BasicVertexShader.cso", "rb");
         assert(ShaderFile);
         
         // Get size
@@ -398,7 +499,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         
         // Input layout
-        D3D10_INPUT_ELEMENT_DESC E = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0};
+        D3D10_INPUT_ELEMENT_DESC E = {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0};
         Result = Device->CreateInputLayout(&E, 1, Bytes, BytesRead, &InputLayout);
         
         if (Bytes)  free(Bytes);
@@ -417,7 +518,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     {
         // Open file
         FILE *ShaderFile;
-        fopen_s(&ShaderFile, "shaders/BasicPixelShader.cso", "rb");
+        fopen_s(&ShaderFile, "shaders\\BasicPixelShader.cso", "rb");
         assert(ShaderFile);
         
         // Get size
@@ -444,6 +545,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Device->PSSetShader(PixelShader);
     }
     
+    //
+    // Constant buffer, used by the shaders
+    ID3D10Buffer *ConstantBuffer;
+    {
+        D3D10_BUFFER_DESC BufferDesc;
+        BufferDesc.ByteWidth = 0;                       // size of the buffer
+        BufferDesc.Usage = D3D10_USAGE_DEFAULT;            // only usable by the GPU
+        BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER; // constant buffer
+        BufferDesc.CPUAccessFlags = 0;                     // No CPU access to the buffer
+        BufferDesc.MiscFlags = 0;                          // No other option
+        
+        D3D10_SUBRESOURCE_DATA InitData;
+        InitData.pSysMem = 0;
+        InitData.SysMemPitch = 0;
+        InitData.SysMemSlicePitch = 0;
+        
+        HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &ConstantBuffer);
+        if (FAILED(Result)) 
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the ConstantBuffer\n");
+            return 1;
+        }
+    }
+    
     
     
     //
@@ -455,6 +581,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // The main loop
+    u32 const stride = sizeof(v2);
+    u32 const offset = 0;
+    Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
+    
     b32 ShouldRun = true;
     MSG msg;
     while (ShouldRun) 
@@ -474,8 +604,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Device->ClearRenderTargetView(RenderTargetView, g_BackgroundColour);
         
         //
-        // Render triangle
-        Device->Draw(3, 0);
+        // Render levels
+        for (u32 Index = 0; Index < VertexBufferCount; ++Index)
+        {
+            Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
+            Device->Draw(VertexCount[Index], 0);
+        }
         
         //
         // Update
@@ -511,6 +645,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Clean up
+    if (Data) {
+        free(Data);
+        Data = nullptr;
+        DataCount = 0;
+    }
+    
     if (PixelShader) {
         PixelShader->Release();
     }
@@ -523,8 +663,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         VertexShader->Release();
     }
     
-    if (VertexBuffer) {
-        VertexBuffer->Release();
+    if (VertexBuffers) {
+        for (u32 Index = 0; Index < VertexBufferCount; ++Index)
+        {
+            if (VertexBuffers[Index])
+            {
+                VertexBuffers[Index]->Release();
+            }
+        }
+        
+        free(VertexBuffers);
+        VertexBuffers = nullptr;
+        VertexBufferCount = 0;
     }
     
     if (DepthStencilState) {
@@ -545,7 +695,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     if (Backbuffer) {
-        OutputDebugString(L"Releasing the backbuffer.\n");
         Backbuffer->Release();
     }
     

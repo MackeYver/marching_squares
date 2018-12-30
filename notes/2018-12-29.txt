@@ -1,0 +1,40 @@
+Goal of the day:
+- Render the result from the Marching Squares class with DirectX
+
+##Adding oop_std.cpp
+------------------
+I have added my already coded MarchingSquares to the project. The output of the algorithm
+is a std::vector of levels, one "level" for each given height. There are several ways for
+rendering this, my choice is to create static vertex buffers, one for each level.
+I only need to upload the data to these buffers once, at creation and then I can render
+the static buffers each frame.
+  Result: I create an array of D3D10Buffer which is malloc'ed to the number of levels
+that was generated.
+
+Issue: std_oop uses STL and is thus using exceptions, I need to enable exceptions in the
+compiler. I have added EHsc as a compile option. I guess that I could compile std_oop.cpp
+seperately and then link all the object files together in a seperate step; but for now
+I just enable c++ exceptions for the entire program.
+
+
+##Rendering the result
+--------------------
+The result of the MarchingSquares class is a std::vector with levels, wich in turn has
+a std::vector with line_segments. Each line_segment consist of two v2, that is the lines
+are not 3D. I need to change the vertex shader to accept v2's and output v3's (with z = 0).
+Also, the topology needs to be changed from triangle list to line list.
+
+I did change the stride "calculation" to v2's but totally forgot about the InputLayout.
+This resultet in that the program rendered garbage, but it did also output a useful debug
+message from DirectX: ("Input vertex slot has stride 8 but expected 12"...). That was
+kind of nice actually!
+
+Changing the InputLayout to only have R32_G32_ removed the error message, but the resultant
+rendering was still garbage -- but this is most likely due to that I haven't yet changed
+to use different coordinate systems (I'm rendering with coordinates in world space but I do
+not use any transform matrices). Next: use transform matrices!
+
+I created a small test program (test.cpp) in order to debug Mathematics.h since I added
+Matrix and v4 with some operations. I'm storing the matrices in column-major order and I
+plan to use them that way as well. Seems like DirectX prefers them that way by default
+in shader code.

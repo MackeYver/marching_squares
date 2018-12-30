@@ -17,16 +17,16 @@
 
 //
 // Base class
-class Marching_squares {
-public:
+class MarchingSquares {
+    public:
     //
     // Types
-    struct Level {
-        f32 height;
-        std::vector<Line_segment> line_segments;
+    struct level {
+        f32 Height;
+        std::vector<line_segment> LineSegments;
     };
     
-    enum Result {
+    enum result {
         ok,
         no_data,
         invalid_cell_count_x,
@@ -36,51 +36,57 @@ public:
         invalid_level_height,
     };
     
-    struct Config {
-        v2  cell_size;
-        u32 cell_count_x;
-        u32 cell_count_y;
-        b32 source_has_origin_upper_left;
+    struct config {
+        v2  CellSize;
+        u32 CellCountX;
+        u32 CellCountY;
+        b32 SourceHasOriginUpperLeft;
     };
     
-    typedef std::vector<Level>::size_type      level_count;
-    typedef std::list<Line_segment>::size_type segment_count;
+    typedef std::vector<level>::size_type        level_count;
+    typedef std::list<line_segment>::size_type   segment_count;
     
     
     //
-    // Operator overloading
-    Level      * operator [] (u32 index);
-    Level const* operator [] (u32 index) const;
+    // Operator overloading, returns the level at the given index
+    level      * operator [] (u32 Index);
+    level const* operator [] (u32 Index) const;
     
     
     //
     // Constructors
-    Marching_squares() : cell_count_x(0), cell_count_y(0), cell_size({}) {}
-    Marching_squares(u32 const *heights, size_t height_count, Config const config = {});
-    Marching_squares(std::vector<int> const &heights, Config const config = {});
+    MarchingSquares() : CellCountX(0), CellCountY(0), CellSize({}) {}
+    MarchingSquares(u32 const *Heights, size_t HeightCount, config const Config = {});
+    MarchingSquares(std::vector<int> const &Heights, config const Config = {}); // copy constructor
+    
+    
+    //
+    // Destructor
+    // The synthesized destructor will be fine, the memory are managed by std::vector and std::list,
+    // which will free the allocated memory in their destructors.
     
     
     //
     // Setters and getters
-    Result set_cell_size(v2 new_size);
+    result SetCellSize(v2 NewSize);
     
-    u32 get_cell_count_x() const        {return cell_count_x;}
-    u32 get_cell_count_y() const        {return cell_count_y;}
-    v2  get_cell_size()    const        {return cell_size;}
+    u32 GetCellCountX() const        {return CellCountX;}
+    u32 GetCellCountY() const        {return CellCountY;}
+    v2  GetCellSize()   const        {return CellSize;}
     
-    level_count get_level_count() const {return levels.size();}
-    Level *get_level(u32 index);
-
+    level_count GetLevelCount() const {return Levels.size();}
+    level *GetLevel(u32 Index);
+    
     
     //
     // Run the algorithm
-    Result march_squares(std::vector<f32> const &level_heights);
+    result MarchSquares(std::vector<f32> const &LevelHeights);
     
-protected:
-    std::vector<Level> levels;
-    std::vector<int> data;
-    v2 cell_size;
-    u32 cell_count_x = 0;
-    u32 cell_count_y = 0;
+    protected:
+    std::vector<level> Levels;
+    std::vector<int> Data;
+    v2 CellSize;
+    u32 CellCountX = 0;
+    u32 CellCountY = 0;
 };
 #endif /* Marching_squares_h */

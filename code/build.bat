@@ -26,19 +26,20 @@ REM https://docs.microsoft.com/en-us/cpp/build/reference/compiler-options-listed
 
 IF %ReleaseMode%==1 (
   ECHO Release mode
-  SET CompilerOptions=/WL /O2 /nologo /fp:fast /fp:except- /Gm- /Zo /Oi /WX /W4 /wd4100 /wd4201 /FC /Z7 /GS- /Gs9999999  
-  SET CompilerOptions=/DRELEASE=1 /DWIN32=1 !CompilerOptions!
+  SET CompilerOptions=/WL /O2 /nologo /fp:fast /fp:except- /EHsc /Gm- /Zo /Oi /WX /W4 /wd4100 /wd4201 /FC /Z7 /GS-
+  SET CompilerOptions=/Gs9999999 /DRELEASE=1 /DWIN32=1 !CompilerOptions!
 ) ELSE (
   ECHO Debug mode
-  SET CompilerOptions=/WL /Od /nologo /fp:fast /fp:except- /Gm- /Zo /Oi /WX /W4 /wd4100 /wd4201 /FC /Z7 /GS- /Gs9999999
-  SET CompilerOptions=/DDEBUG=1 /DWIN32=1 !CompilerOptions!
+  SET CompilerOptions=/WL /Od /nologo /fp:fast /fp:except- /EHsc /Gm- /Zo /Oi /WX /W4 /wd4100 /wd4201 /FC /Z7 /GS-
+  SET CompilerOptions=/Gs9999999 /DDEBUG=1 /DWIN32=1 !CompilerOptions!
 )
 
 
 REM WL		 One line diagonostics
-REM Ox		 Code generation d = Debug, 1 = small code, 2 = fast code
+REM Ox		 Code generation x E [d = Debug, 1 = small code, 2 = fast code]
 REM fp:fast    Fast floating point code generated
 REM fp:except- No floating point exceptions
+REM EHsc       Catches C++ exceptions only
 REM GM-		Enables minimal rebuild (- disables it, we want all files compiled all the time)
 REM Zo		 Generate enhanced debugging information for optimized code in non-debug builds
 REM Oi		 Generates intrinsic functions.
@@ -75,13 +76,21 @@ pushd c:\developer\Marching_squares\build
 ECHO Removing all old files...
 del /Q *.*
 
-
 ECHO Building...
-cl %CompilerOptions% ../code/win32_main.cpp /link /SUBSYSTEM:windows %LinkerOptions% /out:Marching_squares.exe
+cl %CompilerOptions% ../code/*.cpp /link /SUBSYSTEM:windows %LinkerOptions% /out:Marching_squares.exe
+
+IF %errorlevel% NEQ 0 (
+  popd
+  EXIT /b %errorlevel%
+)
 
 echo Embedding manifest...
 mt.exe -nologo -manifest "visual_studio_nonsense/a.manifest" -outputresource:"Marching_squares.exe;#1"
 
-ECHO All done.
+IF %errorlevel% NEQ 0 (
+  popd
+  EXIT /b %errorlevel%
+)
 
+ECHO All done.
 popd
