@@ -88,5 +88,6 @@ class MarchingSquares {
     v2 CellSize;
     u32 CellCountX = 0;
     u32 CellCountY = 0;
+    b32 OriginBottomLeft = true;
 };
 #endif /* Marching_squares_h */

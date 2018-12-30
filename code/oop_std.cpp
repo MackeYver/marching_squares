@@ -31,13 +31,13 @@ MarchingSquares::level const *MarchingSquares::operator [] (u32 Index) const {
 
 /** @desc Will construct a new instance of MarchingSquares, the vector will be copied. */
 MarchingSquares::MarchingSquares(std::vector<int> const &Heights, config C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
+CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY), OriginBottomLeft(C.SourceHasOriginUpperLeft)
 {
     copy(Heights.begin(), Heights.end(), back_inserter(Data));
 }
 
 MarchingSquares::MarchingSquares(u32 const *Heights, size_t HeightCount, config const C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
+CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY), OriginBottomLeft(C.SourceHasOriginUpperLeft)
 {
     copy(Heights, Heights + HeightCount, back_inserter(Data));
 }

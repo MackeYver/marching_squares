@@ -128,7 +128,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 *Data = nullptr;
     u32 DataCount = 0;
     {
-        HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\test.txt",
+        //HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\volcano.txt",
+        HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\test2.txt",
                                   GENERIC_READ,
                                   FILE_SHARE_READ,
                                   nullptr,
@@ -162,7 +163,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         // Count the number of elements
         u32 SpaceCount = 0;
-        for (u8 Index = 0; Index < FileSize.QuadPart; ++Index)
+        for (u32 Index = 0; Index < FileSize.QuadPart; ++Index)
         {
             if (FileData[Index] == ' ' || FileData[Index] == '\n')  ++SpaceCount;
         }
@@ -202,14 +203,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Generate lines from data using Marching Squares
     MarchingSquares::config Config;
-    Config.CellCountX = 11;
-    Config.CellCountY = 11;
-    Config.CellSize = V2((f32)Width / (f32)(Config.CellCountX - 1), (f32)Height / (f32)(Config.CellCountY - 1));
-    Config.SourceHasOriginUpperLeft = true;
+    {
+        Config.CellCountX = 5;
+        Config.CellCountY = 5;
+        f32 SmallestSize = min((f32)Width / (f32)(Config.CellCountX - 1), (f32)Height / (f32)(Config.CellCountY - 1));
+        Config.CellSize = V2(SmallestSize, SmallestSize);
+        Config.SourceHasOriginUpperLeft = false;
+    }
     
     MarchingSquares MS(Data, DataCount, Config);
-    std::vector<f32> Heights = {1, 2, 3, 4, 5};
+    //std::vector<f32> Heights = {80, 100, 120, 140, 160, 180};
+    std::vector<f32> Heights = {2, 3};
     MS.MarchSquares(Heights);
+    
+    free(Data);
+    Data = nullptr;
+    DataCount = 0;
     
     
     //
@@ -462,6 +471,66 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
+    
+    //
+    // Vertexbuffer, grid lines
+    ID3D10Buffer *VertexBufferGridLines;
+    u32 VertexCountGridLines = 0;
+    {
+        //
+        // Generate the data
+        u32 CellCountX = MS.GetCellCountX();
+        u32 CellCountY = MS.GetCellCountY();
+        v2 CellSize = MS.GetCellSize();
+        
+        VertexCountGridLines = 2 * ((CellCountX + 1) + (CellCountY + 1));
+        size_t Size = VertexCountGridLines * sizeof(v2);
+        v2 *GridLinesVertices = (v2 *)malloc(Size);
+        assert(GridLinesVertices);
+        
+        u32 DataIndex = 0;
+        for (u32 y = 0; y <= CellCountY; ++y)
+        {
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(0, y));
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(CellCountX, y));
+        }
+        
+        for (u32 x = 0; x <= CellCountX; ++x)
+        {
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, 0));
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, CellCountY));
+        }
+        assert(DataIndex == VertexCountGridLines);
+        
+        
+        //
+        // Create the buffer
+        D3D10_BUFFER_DESC BufferDesc;
+        BufferDesc.ByteWidth = Size;                     // size of the buffer
+        BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
+        BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
+        BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
+        BufferDesc.MiscFlags = 0;                        // No other option
+        
+        D3D10_SUBRESOURCE_DATA InitData;
+        InitData.pSysMem = GridLinesVertices;
+        InitData.SysMemPitch = 0;
+        InitData.SysMemSlicePitch = 0;
+        
+        HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &VertexBufferGridLines);
+        if (FAILED(Result)) 
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the Vertex buffer for the grid lines\n");
+            return 1;
+        }
+        
+        free(GridLinesVertices);
+        GridLinesVertices = nullptr;
+    }
+    
+    
+    
     //
     // Shaders
     ID3D10VertexShader *VertexShader;
@@ -554,6 +623,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     {
         m4 TransformMatrix;
         v4 Colour;
+        v3 Padding;
+        f32 Z;
     };
     
     shader_constants ShaderConstants;
@@ -567,7 +638,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         v4 Y = { 0.0f,    Sy, 0.0f, 0.0f};
         v4 Z = { 0.0f,  0.0f,   Sz, 0.0f};
         v4 W = {-1.0f, -1.0f, 0.0f, 1.0f};
+        
         ShaderConstants.TransformMatrix = M4(X, Y, Z, W);
+        ShaderConstants.Colour = v4_one;
+        ShaderConstants.Z = 0.0f;
+        assert((sizeof(shader_constants) / 16) % 2 == 0);
         
         D3D10_BUFFER_DESC BufferDesc;
         BufferDesc.ByteWidth = sizeof(ShaderConstants);    
@@ -611,6 +686,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 const offset = 0;
     Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
     
+#if 0
     static v4 const Colours[] = 
     {
         {0.0f, 0.0f, 1.0f, 1.0f},
@@ -629,17 +705,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         {0.5f, 0.5f, 0.0f, 0.5f},
         {0.5f, 0.5f, 0.5f, 0.5f},
     };
+#else
+    static v4 const Colours[] = 
+    {
+        {0.4f, 0.4f, 0.4f, 1.0f},
+        {0.5f, 0.5f, 0.5f, 1.0f},
+        {0.6f, 0.6f, 0.6f, 1.0f},
+        {0.7f, 0.7f, 0.7f, 1.0f},
+        {0.8f, 0.8f, 0.8f, 1.0f},
+        {0.9f, 0.9f, 0.9f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+    };
+#endif
     static u32 const ColourCount = sizeof(Colours) / sizeof(*Colours);
     
     b32 ShouldRun = true;
     MSG msg;
     while (ShouldRun) 
     {
-        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
+        {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
             
-            if (msg.message == WM_QUIT) {
+            if (msg.message == WM_QUIT) 
+            {
                 ShouldRun = false;
             }
         }
@@ -647,15 +741,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         //
         // Clear
         Device->ClearDepthStencilView(DepthStencilView, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1, 0);
-        Device->ClearRenderTargetView(RenderTargetView, g_BackgroundColour);
+        static v4 const BackgroundColour = V4(0.0f, 0.0f, 0.0f, 1.0f);
+        Device->ClearRenderTargetView(RenderTargetView, (float const *)&BackgroundColour);
+        
+        
+        //
+        // Render grid
+        ShaderConstants.Colour = V4(0.2f, 0.2f, 0.2f, 1.0f);
+        ShaderConstants.Z = 0.3f;
+        // Refresh the data in the constant buffer
+        Device->UpdateSubresource(ConstantBuffer,   // Resource to update
+                                  0,                // Subresource index
+                                  nullptr,          // Destination box, nullptr for the entire buffer 
+                                  &ShaderConstants, // Pointer to the data             
+                                  0,                // Row pitch (only for textures?) 
+                                  0);               // Depth pitch (only for textures?)
+        Device->IASetVertexBuffers(0, 1, &VertexBufferGridLines, &stride, &offset);
+        Device->Draw(VertexCountGridLines, 0);
+        
         
         //
         // Render levels
         for (u32 Index = 0; Index < VertexBufferCount; ++Index)
         {
             // Change the colour
-            u32 NewIndex = Index % ColourCount;
-            ShaderConstants.Colour = Colours[NewIndex];
+            //u32 NewIndex = Index % ColourCount;
+            //ShaderConstants.Colour = Colours[NewIndex];
+            ShaderConstants.Colour = V4(1.0f, 1.0f, 1.0f, 1.0f);
+            ShaderConstants.Z = 0.0f;
             
             // Refresh the data in the constant buffer
             Device->UpdateSubresource(ConstantBuffer,   // Resource to update
@@ -703,12 +816,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Clean up
-    if (Data) {
-        free(Data);
-        Data = nullptr;
-        DataCount = 0;
-    }
-    
     if (ConstantBuffer)
     {
         ConstantBuffer->Release();

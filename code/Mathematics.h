@@ -98,6 +98,13 @@ inline v2 V2(f32 x, f32 y) {
     return Result;
 }
 
+inline v2 V2(u32 x, u32 y) {
+    v2 Result;
+    Result.x = (f32)x;
+    Result.y = (f32)y;
+    return Result;
+}
+
 //
 // v2 vs v2
 inline v2 operator + (v2 const& A, v2 const& B) {

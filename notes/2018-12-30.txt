@@ -1,6 +1,5 @@
 
 
-
 #Goals of the day (O = optional)
 -------------------------------
 1. Render the different layers in different colours (updating the constant buffer)
@@ -18,7 +17,7 @@ colour that should be used. In order to do this I need to do two things:
    a) the usage to D3D10_USAGE_DYNAMICS
    b) the CPUAccessFlags to D3D10_CPU_ACCESS_WRITE
 
-So I got the data uploaded to the shaders for each frame, turns out that I didn't need to create 
+So I got the data uploaded to the shaders for each frame, turns out that I didn't need to set 
 the buffer as dynamic or change the CPUAccessFlags. I used UpdateSubresource which must be used 
 on an un-mapped resource.
 
@@ -37,10 +36,21 @@ of the Rect didn't change at all (I expected it to change after the call to Adju
 I also saw that I didn't use the same styles in the CreateWindow as in the AdjustRect. But the 
 big problem was that I did something stupid... 
 I confused the WindowClass style with the Window style, i.e. CS_VREDRAW with WS_ stuff. 
-Changing this and making sure that I used the same styles everywhere fixed the problem entirely. 
+Changing this and making sure that I used the same style everywhere fixed the problem entirely. 
 The window is now of correct size (checked a screenshot in MSPaint) and all the lines connects.
 Sidequest complete!
 
 
+
 ##2. Render a grid
 ----------------
+Nothing really interesting or troublesome with this. The grid renders correctly (I'm starting
+to get a hang on this now). The only issue to solve is that the grid renders at z = 0.0 which
+is the same as the actually lines. Since I do have depth testing enabled, the lines that 
+intersects with the grid is not being rendered. I will add a z variable to the constant
+buffer.
+The size of the constant buffer must be a mutliple of 16 bytes; I added a v3 as padding in
+order to make the ShaderConstant struct be 96 bytes. I know this as DirectX gave that as an
+error message, it was a precise and clear error message. Thank you DirectX!
+
+Completed the two objectives (will pass on the optional for today!).
