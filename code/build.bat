@@ -87,7 +87,7 @@ IF %errorlevel% NEQ 0 (
 )
 
 echo Embedding manifest...
-mt.exe -nologo -manifest "visual_studio_nonsense/a.manifest" -outputresource:"Marching_squares.exe;#1"
+mt.exe -nologo -manifest "../data/a.manifest" -outputresource:"Marching_squares.exe;#1"
 
 IF %errorlevel% NEQ 0 (
   popd

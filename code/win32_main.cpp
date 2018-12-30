@@ -88,12 +88,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         WC.lpszMenuName = nullptr;
         WC.lpszClassName = TEXT("test");
         
+        DWORD Style =  WS_CAPTION | WS_SYSMENU;
+        
         RECT Rect;
         Rect.left = 0;
         Rect.top = 0;
         Rect.right = Width;
         Rect.bottom = Height;
-        AdjustWindowRect(&Rect, WC.style, false);
+        AdjustWindowRect(&Rect, Style, false);
         
         if (!RegisterClass(&WC)) 
         {
@@ -103,9 +105,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         hWnd = CreateWindow(
             TEXT("test"),                   /* Class Name */
             TEXT("test"),                   /* Title */
-            WS_OVERLAPPEDWINDOW,            /* Style */
+            Style,                          /* Style */
             CW_USEDEFAULT, CW_USEDEFAULT,   /* Position */
-            Rect.right, Rect.bottom,        /* Size */
+            Rect.right - Rect.left, 
+            Rect.bottom - Rect.top ,        /* Size */
             nullptr,                        /* Parent */
             nullptr,                        /* No menu */
             hInstance,                      /* Instance */
@@ -219,7 +222,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     {
         // This flag adds support for surfaces with a color-channel ordering different
         // from the API default. It is required for compatibility with Direct2D.
-        // @note According to documentation, this should be used with CreateDevice1 which creates a 10.1 device?
+        // According to documentation, this should be used with CreateDevice1 which creates a 10.1 device?
         // UINT DeviceFlags = D3D10_CREATE_DEVICE_BGRA_SUPPORT;
         // TODO(Marcus): Handle pixel format a bit more professionaly, check which formats that are
         //               supported and try to use BGRA -- it seems like this is the format used by Windows.
@@ -431,9 +434,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     for (u32 Index = 0; Index < VertexBufferCount; ++Index)
     {
-        // Assuming that the origin is in the center and the vertices are in clockwise order.
-        //v3 TriangleVertices[] = {{-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
-        
         MarchingSquares::level *Level = MS[Index];
         assert(Level);
         size_t Size = Level->LineSegments.size() * sizeof(line_segment);
@@ -545,15 +545,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Device->PSSetShader(PixelShader);
     }
     
+    
+    
     //
     // Constant buffer, used by the shaders
     ID3D10Buffer *ConstantBuffer;
     struct shader_constants
     {
         m4 TransformMatrix;
+        v4 Colour;
     };
-    shader_constants ShaderConstants;
     
+    shader_constants ShaderConstants;
     {
         f32 Far = 1.0f;
         f32 Sx = 2.0f / (f32)Width;
@@ -567,11 +570,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         ShaderConstants.TransformMatrix = M4(X, Y, Z, W);
         
         D3D10_BUFFER_DESC BufferDesc;
-        BufferDesc.ByteWidth = sizeof(ShaderConstants);    // size of the buffer
-        BufferDesc.Usage = D3D10_USAGE_DEFAULT;            // only usable by the GPU
-        BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER; // constant buffer
-        BufferDesc.CPUAccessFlags = 0;                     // No CPU access to the buffer
-        BufferDesc.MiscFlags = 0;                          // No other option
+        BufferDesc.ByteWidth = sizeof(ShaderConstants);    
+        //BufferDesc.Usage = D3D10_USAGE_DYNAMIC;             // We will write stuff to the buffer from the CPU
+        //BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;  // constant buffer
+        //BufferDesc.CPUAccessFlags = D3D10_CPU_ACCESS_WRITE; // CPU write access to the buffer
+        BufferDesc.Usage = D3D10_USAGE_DEFAULT;             
+        BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;  // constant buffer
+        BufferDesc.CPUAccessFlags = 0; 
+        BufferDesc.MiscFlags = 0;                           
         
         D3D10_SUBRESOURCE_DATA InitData;
         InitData.pSysMem = &ShaderConstants;
@@ -587,6 +593,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         }
         
         Device->VSSetConstantBuffers(0, 1, &ConstantBuffer);
+        Device->PSSetConstantBuffers(0, 1, &ConstantBuffer);
     }
     
     
@@ -603,6 +610,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 const stride = sizeof(v2);
     u32 const offset = 0;
     Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
+    
+    static v4 const Colours[] = 
+    {
+        {0.0f, 0.0f, 1.0f, 1.0f},
+        {0.0f, 1.0f, 0.0f, 1.0f},
+        {0.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 0.0f, 0.0f, 1.0f},
+        {1.0f, 0.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        
+        {0.0f, 0.0f, 0.5f, 0.5f},
+        {0.0f, 0.5f, 0.0f, 0.5f},
+        {0.0f, 0.5f, 0.5f, 0.5f},
+        {0.5f, 0.0f, 0.0f, 0.5f},
+        {0.5f, 0.0f, 0.5f, 0.5f},
+        {0.5f, 0.5f, 0.0f, 0.5f},
+        {0.5f, 0.5f, 0.5f, 0.5f},
+    };
+    static u32 const ColourCount = sizeof(Colours) / sizeof(*Colours);
     
     b32 ShouldRun = true;
     MSG msg;
@@ -626,6 +653,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         // Render levels
         for (u32 Index = 0; Index < VertexBufferCount; ++Index)
         {
+            // Change the colour
+            u32 NewIndex = Index % ColourCount;
+            ShaderConstants.Colour = Colours[NewIndex];
+            
+            // Refresh the data in the constant buffer
+            Device->UpdateSubresource(ConstantBuffer,   // Resource to update
+                                      0,                // Subresource index
+                                      nullptr,          // Destination box, nullptr for the entire buffer 
+                                      &ShaderConstants, // Pointer to the data             
+                                      0,                // Row pitch (only for textures?) 
+                                      0);               // Depth pitch (only for textures?)
+            
             Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
             Device->Draw(VertexCount[Index], 0);
         }

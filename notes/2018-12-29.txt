@@ -41,4 +41,4 @@ in shader code.
 
 Well, I added a constant buffer to the shaders which solely consists of one matrix, a 
 matrix which I derived easily and lazily. (It basically just scales [0, 1024] to [-1, 1]).
-And NOW IT RENDERS! Yay!
+And NOW IT RENDERS (possibly correct)! Yay!

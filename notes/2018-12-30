@@ -1,0 +1,46 @@
+
+
+
+#Goals of the day (O = optional)
+-------------------------------
+1. Render the different layers in different colours (updating the constant buffer)
+2. Render a grid to display the cell sizes
+O. Write cell heights (Text rendering)
+
+
+
+##1. Render the different levels in different colours
+---------------------------------------------------
+In order to change the colour of the lines per level, I need to supply the Pixel shader with the 
+colour that should be used. In order to do this I need to do two things:
+1. Bind the constant buffer to the Pixel Shader as well
+2. Make the constant buffer dynamic, i.e. changing:
+   a) the usage to D3D10_USAGE_DYNAMICS
+   b) the CPUAccessFlags to D3D10_CPU_ACCESS_WRITE
+
+So I got the data uploaded to the shaders for each frame, turns out that I didn't need to create 
+the buffer as dynamic or change the CPUAccessFlags. I used UpdateSubresource which must be used 
+on an un-mapped resource.
+
+However, since the window is not of the correct size (see earlier notes), it looks like Windows 
+scales the image. This causes the lines to look like they are not connected to each other. 
+Resizing the window (the buffers do not change sizes) results in that the lines connect in that 
+resulting scaled up image.
+I need to check why the window is of the wrong size since the scaling is now causing problems.
+
+
+
+##Sidequest -- figuring out why the window is of the wrong size
+-------------------------------------------------------------
+Stepping through the code and looking at the results from AdjustRect I could see that the size 
+of the Rect didn't change at all (I expected it to change after the call to AdjustRect). 
+I also saw that I didn't use the same styles in the CreateWindow as in the AdjustRect. But the 
+big problem was that I did something stupid... 
+I confused the WindowClass style with the Window style, i.e. CS_VREDRAW with WS_ stuff. 
+Changing this and making sure that I used the same styles everywhere fixed the problem entirely. 
+The window is now of correct size (checked a screenshot in MSPaint) and all the lines connects.
+Sidequest complete!
+
+
+##2. Render a grid
+----------------
