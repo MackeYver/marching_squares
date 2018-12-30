@@ -121,7 +121,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     
     //
-    // Read data from file
+    // Read data from file (using Win32)
     u32 *Data = nullptr;
     u32 DataCount = 0;
     {
@@ -201,7 +201,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     MarchingSquares::config Config;
     Config.CellCountX = 11;
     Config.CellCountY = 11;
-    Config.CellSize = V2((f32)(Width / Config.CellCountX), (f32)(Height / Config.CellCountY));
+    Config.CellSize = V2((f32)Width / (f32)(Config.CellCountX - 1), (f32)Height / (f32)(Config.CellCountY - 1));
     Config.SourceHasOriginUpperLeft = true;
     
     MarchingSquares MS(Data, DataCount, Config);
@@ -548,16 +548,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Constant buffer, used by the shaders
     ID3D10Buffer *ConstantBuffer;
+    struct shader_constants
     {
+        m4 TransformMatrix;
+    };
+    shader_constants ShaderConstants;
+    
+    {
+        f32 Far = 1.0f;
+        f32 Sx = 2.0f / (f32)Width;
+        f32 Sy = 2.0f / (f32)Height;
+        f32 Sz = 1.0f / Far;
+        
+        v4 X = {   Sx,  0.0f, 0.0f, 0.0f};
+        v4 Y = { 0.0f,    Sy, 0.0f, 0.0f};
+        v4 Z = { 0.0f,  0.0f,   Sz, 0.0f};
+        v4 W = {-1.0f, -1.0f, 0.0f, 1.0f};
+        ShaderConstants.TransformMatrix = M4(X, Y, Z, W);
+        
         D3D10_BUFFER_DESC BufferDesc;
-        BufferDesc.ByteWidth = 0;                       // size of the buffer
+        BufferDesc.ByteWidth = sizeof(ShaderConstants);    // size of the buffer
         BufferDesc.Usage = D3D10_USAGE_DEFAULT;            // only usable by the GPU
         BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER; // constant buffer
         BufferDesc.CPUAccessFlags = 0;                     // No CPU access to the buffer
         BufferDesc.MiscFlags = 0;                          // No other option
         
         D3D10_SUBRESOURCE_DATA InitData;
-        InitData.pSysMem = 0;
+        InitData.pSysMem = &ShaderConstants;
         InitData.SysMemPitch = 0;
         InitData.SysMemSlicePitch = 0;
         
@@ -568,6 +585,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             OutputDebugString(L"Failed to create the ConstantBuffer\n");
             return 1;
         }
+        
+        Device->VSSetConstantBuffers(0, 1, &ConstantBuffer);
     }
     
     
@@ -651,6 +670,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         DataCount = 0;
     }
     
+    if (ConstantBuffer)
+    {
+        ConstantBuffer->Release();
+    }
+    
     if (PixelShader) {
         PixelShader->Release();
     }
@@ -678,7 +702,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     if (DepthStencilState) {
-        Device->OMSetDepthStencilState(nullptr, 1); // // TODO(Marcus): Find out if this is correct!
         DepthStencilState->Release();
     }
     

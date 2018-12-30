@@ -38,3 +38,7 @@ I created a small test program (test.cpp) in order to debug Mathematics.h since 
 Matrix and v4 with some operations. I'm storing the matrices in column-major order and I
 plan to use them that way as well. Seems like DirectX prefers them that way by default
 in shader code.
+
+Well, I added a constant buffer to the shaders which solely consists of one matrix, a 
+matrix which I derived easily and lazily. (It basically just scales [0, 1024] to [-1, 1]).
+And NOW IT RENDERS! Yay!

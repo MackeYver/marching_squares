@@ -19,6 +19,8 @@ IF %CompileShaders%==1 (
   )
 )
 
+IF %errorlevel% NEQ 0 EXIT /b %errorlevel%
+
 
 REM ----------------------------------------------------------------------------------
 REM Compiler Options
