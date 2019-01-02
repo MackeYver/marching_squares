@@ -61,7 +61,7 @@ REM ----------------------------------------------------------------------------
 REM Linker Options
 REM https://docs.microsoft.com/en-us/cpp/build/reference/linker-options?view=vs-2017
 
-set LinkerOptions=/MANIFEST:NO /INCREMENTAL:NO /OPT:REF user32.lib d3d10.lib dxgi.lib dxguid.lib
+set LinkerOptions=/MANIFEST:NO /INCREMENTAL:NO /OPT:REF user32.lib d3d10_1.lib dxgi.lib dxguid.lib dwrite.lib d2d1.lib
 REM gdi32.lib winmm.lib kernel32.lib
 
 REM incremental:no Link Incrementally is not selected

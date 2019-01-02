@@ -9,11 +9,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include <d3d10.h>
+#include <d3d10_1.h>
 #include <dxgi.h>
 #ifdef DEBUG
 #include <dxgidebug.h>
 #endif
+
+#include <dwrite.h> // DirectWrite (Dwrite.lib)
+#include <d2d1_1.h> // Direct2D    (D2d1_1.lib)
 
 #include <assert.h>
 #include <cctype>
@@ -210,7 +213,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Config.CellSize = V2(SmallestSize, SmallestSize);
         Config.SourceHasOriginUpperLeft = false;
     }
-    
     MarchingSquares MS(Data, DataCount, Config);
     //std::vector<f32> Heights = {80, 100, 120, 140, 160, 180};
     std::vector<f32> Heights = {2, 3};
@@ -227,17 +229,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Create the device
-    ID3D10Device *Device;
+    ID3D10Device1 *Device;
     {
         // This flag adds support for surfaces with a color-channel ordering different
         // from the API default. It is required for compatibility with Direct2D.
-        // According to documentation, this should be used with CreateDevice1 which creates a 10.1 device?
         // UINT DeviceFlags = D3D10_CREATE_DEVICE_BGRA_SUPPORT;
         // TODO(Marcus): Handle pixel format a bit more professionaly, check which formats that are
-        //               supported and try to use BGRA -- it seems like this is the format used by Windows.
+        //               supported etc...
         //               -- 2018-12-16
         //
-        UINT DeviceFlags = 0;
+        UINT DeviceFlags = D3D10_CREATE_DEVICE_BGRA_SUPPORT;
         
 #ifdef DEBUG
         DeviceFlags = DeviceFlags | D3D10_CREATE_DEVICE_DEBUG;
@@ -245,12 +246,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         //
         // Create device (default GPU)
-        HRESULT Result = D3D10CreateDevice(nullptr,                     // Adapter, nullptr = default
-                                           D3D10_DRIVER_TYPE_HARDWARE,  // Driver type
-                                           nullptr,                     // HMODULE
-                                           DeviceFlags,                 // Flags
-                                           D3D10_SDK_VERSION,           // Version of the SDK
-                                           &Device);                 // Pointer to the device
+        HRESULT Result = D3D10CreateDevice1(nullptr,                     // Adapter, nullptr = default
+                                            D3D10_DRIVER_TYPE_HARDWARE,  // Driver type
+                                            nullptr,                     // HMODULE
+                                            DeviceFlags,                 // Flags
+                                            D3D10_FEATURE_LEVEL_10_0,    // Feature level
+                                            D3D10_1_SDK_VERSION,         // Version of the SDK
+                                            &Device);                    // Pointer to the device
         if (FAILED(Result) || !Device) 
         {
             OutputDebugString(L"Failed to create device!\n");
@@ -259,20 +261,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
-    
     //
-    // Fill out the structure describing the SwapChain
-    DXGI_SWAP_CHAIN_DESC SwapChainDesc;
+    // SwapChaing
+    IDXGISwapChain *SwapChain;
     {
+        //
+        //Fill out a structure describing the SwapChain
+        DXGI_SWAP_CHAIN_DESC SwapChainDesc;
         ZeroMemory(&SwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
-        
         SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
         SwapChainDesc.BufferDesc.Width = Width;
         SwapChainDesc.BufferDesc.Height = Height;
         SwapChainDesc.BufferDesc.RefreshRate.Numerator = 0;
         SwapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
-        //SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-        SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         SwapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
         SwapChainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
         
@@ -282,19 +283,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         SwapChainDesc.BufferCount = 2;
         SwapChainDesc.OutputWindow = hWnd;
-        SwapChainDesc.Windowed = true;           // Sets the initial state of full-screen mode.
+        SwapChainDesc.Windowed = true;           
         SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         SwapChainDesc.Flags = 0;
-    }
-    
-    
-    
-    //
-    // Create the SwapChain
-    IDXGISwapChain *SwapChain;
-    IDXGIFactory *Factory;
-    {
-        HRESULT Result = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)(&Factory));
+        
+        
+        //
+        // Create the SwapChain
+        IDXGIFactory *Factory;
+        HRESULT Result = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&Factory);
         if (FAILED(Result)) 
         {
             // TODO(Marcus): Add better error handling
@@ -309,6 +306,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             OutputDebugString(L"Failed to create the swap chain!\n");
             return 1;
         }
+        
+        Factory->Release();
     }
     
     
@@ -317,7 +316,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // Get a pointer to the backbuffer
     ID3D10Texture2D *Backbuffer;
     {
-        HRESULT Result = SwapChain->GetBuffer(0, __uuidof(ID3D10Texture2D), reinterpret_cast<void**>(&Backbuffer));
+        HRESULT Result = SwapChain->GetBuffer(0, __uuidof(ID3D10Texture2D), (void**)&Backbuffer);
         if (FAILED(Result)) 
         {
             // TODO(Marcus): Add better error handling
@@ -416,15 +415,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Viewport
-    D3D10_VIEWPORT ViewPort;
+    D3D10_VIEWPORT Viewport;
     {
-        ViewPort.TopLeftX = 0;
-        ViewPort.TopLeftY = 0;
-        ViewPort.Width    = Width;
-        ViewPort.Height   = Height;
-        ViewPort.MinDepth = 0.0f;
-        ViewPort.MaxDepth = 1.0f;
-        Device->RSSetViewports(1, &ViewPort);
+        Viewport.TopLeftX = 0;
+        Viewport.TopLeftY = 0;
+        Viewport.Width    = Width;
+        Viewport.Height   = Height;
+        Viewport.MinDepth = 0.0f;
+        Viewport.MaxDepth = 1.0f;
+        Device->RSSetViewports(1, &Viewport);
     }
     
     
@@ -674,6 +673,129 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     
     //
+    // DirectWrite
+    IDWriteFactory *DWriteFactory;
+    ID2D1Device *D2DDevice;
+    ID2D1DeviceContext *D2DDeviceContext;
+    ID2D1Bitmap1 *D2DBitmap;
+    ID2D1SolidColorBrush *D2DBrush;
+    IDWriteTextFormat *D2DTextFormat;
+    IDWriteTextLayout *D2DTextLayout;
+    {
+        HRESULT Result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, 
+                                             __uuidof(IDWriteFactory), 
+                                             (IUnknown **)&DWriteFactory);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the DirectWrite factory!\n");
+            return 1;
+        }
+        
+        
+        //
+        // Direct2D
+        ID2D1Factory1 *D2DFactory;
+        Result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, // Will only be used in this thread
+                                   __uuidof(ID2D1Factory),
+                                   (void **)&D2DFactory);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the Direct2D factory!\n");
+            return 1;
+        }
+        
+        // Get the 
+        IDXGIDevice *DXGIDevice;
+        Result = Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&DXGIDevice);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to get the DXGIDevice from the D3D10Device1!\n");
+            return 1;
+        }
+        
+        Result = D2DFactory->CreateDevice(DXGIDevice, &D2DDevice);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DDevice!\n");
+            return 1;
+        }
+        
+        Result = D2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &D2DDeviceContext);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DDeviceContext!\n");
+            return 1;
+        }
+        
+        IDXGISurface *D2DBuffer;
+        Result = SwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&D2DBuffer);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to get the backbuffer as IDXGISurface!\n");
+            return 1;
+        }
+        
+        D2D1_BITMAP_PROPERTIES1 Properties;
+        Properties.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        Properties.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
+        Properties.dpiX = 0;
+        Properties.dpiX = 0;
+        Properties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
+        Properties.colorContext = nullptr;
+        
+        Result = D2DDeviceContext->CreateBitmapFromDxgiSurface(D2DBuffer, Properties, &D2DBitmap);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DBitmap!\n");
+            return 1;
+        }
+        Result = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow, 1.0f), &D2DBrush);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DBrush!\n");
+            return 1;
+        }
+        
+        Result = DWriteFactory->CreateTextFormat(L"Microsoft New Tai Lue",
+                                                 nullptr,
+                                                 DWRITE_FONT_WEIGHT_NORMAL,
+                                                 DWRITE_FONT_STYLE_NORMAL,
+                                                 DWRITE_FONT_STRETCH_NORMAL,
+                                                 96.0f/4.0f,
+                                                 L"en-GB",
+                                                 &D2DTextFormat);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DTextFormat!\n");
+            return 1;
+        }
+        
+        static WCHAR const *String = L"The quick fox jumped over the lazy dog";
+        Result = DWriteFactory->CreateTextLayout(String, wcslen(String), D2DTextFormat, Width, Height, &D2DTextLayout);
+        if (FAILED(Result))
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the D2DTextLayout!\n");
+            return 1;
+        }
+        
+        D2DBuffer->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+    }
+    
+    
+    
+    //
     // Show and update window
     ShowWindow(hWnd, nShowCmd);
     UpdateWindow(hWnd);
@@ -782,6 +904,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             Device->Draw(VertexCount[Index], 0);
         }
         
+        
+        //
+        // Render text
+        D2DDeviceContext->BeginDraw();
+        D2DDeviceContext->DrawTextLayout({10.0f, 10.0f},
+                                         D2DTextLayout,
+                                         D2DBrush,
+                                         D2D1_DRAW_TEXT_OPTIONS_NONE);
+        D2DDeviceContext->EndDraw();
+        
         //
         // Update
         SwapChain->Present(0, 0);
@@ -816,71 +948,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Clean up
-    if (ConstantBuffer)
+    D2DTextLayout->Release();
+    D2DTextFormat->Release();
+    D2DBrush->Release();
+    D2DBitmap->Release();
+    D2DDeviceContext->Release();
+    D2DDevice->Release();
+    DWriteFactory->Release();
+    ConstantBuffer->Release();
+    PixelShader->Release();
+    InputLayout->Release();
+    VertexShader->Release();
+    VertexBufferGridLines->Release();
+    
+    for (u32 Index = 0; Index < VertexBufferCount; ++Index)
     {
-        ConstantBuffer->Release();
+        VertexBuffers[Index]->Release();
     }
     
-    if (PixelShader) {
-        PixelShader->Release();
-    }
+    free(VertexBuffers);
+    VertexBuffers = nullptr;
+    VertexBufferCount = 0;
     
-    if (InputLayout) {
-        InputLayout->Release();
-    }
+    free(VertexCount);
+    VertexCount = nullptr;
     
-    if (VertexShader) {
-        VertexShader->Release();
-    }
-    
-    if (VertexBuffers) {
-        for (u32 Index = 0; Index < VertexBufferCount; ++Index)
-        {
-            if (VertexBuffers[Index])
-            {
-                VertexBuffers[Index]->Release();
-            }
-        }
-        
-        free(VertexBuffers);
-        VertexBuffers = nullptr;
-        VertexBufferCount = 0;
-    }
-    
-    if (DepthStencilState) {
-        DepthStencilState->Release();
-    }
-    
-    if (DepthStencilView) {
-        DepthStencilView->Release();
-    }
-    
-    if (DepthStencilBuffer) {
-        DepthStencilBuffer->Release();
-    }
-    
-    if (RenderTargetView) {
-        RenderTargetView->Release();
-    }
-    
-    if (Backbuffer) {
-        Backbuffer->Release();
-    }
-    
-    if (SwapChain) {
-        OutputDebugString(L"Releasing SwapChain.\n");
-        SwapChain->Release();
-    }
-    
-    if (Factory) {
-        OutputDebugString(L"Releasing Factory.\n");
-        Factory->Release();
-    }
-    
-    if (Device) {
-        OutputDebugString(L"Releasing D3DDevice.\n");
-        Device->Release();
-    }
+    RenderTargetView->Release();
+    DepthStencilState->Release();
+    DepthStencilView->Release();
+    DepthStencilBuffer->Release();
+    Backbuffer->Release();
+    SwapChain->Release();
+    Device->Release();
     
     OutputDebugString(L"***** Begin ReportLiveObjects call *****\n");
     DebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
