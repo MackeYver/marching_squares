@@ -1,0 +1,17 @@
+Goal: the same as the other day: get some text rendered. In other words: debug the code.
+
+
+I did check the GPU calls via the Visual Studio's GPU debugger, but I saw no draw calls related 
+to Direct2D or DirectWrite as far as I could tell. So it seem like it there are draw calls 
+being generated? I will try to get some debugging information from Direct2D or DirectWrite.
+What worries me a bit for the moment is that I migh be mixing different version with each other,
+perhaps this is no good?
+
+Looking the HRESULT from the EndDraw() call, I could see that some object was not in a valid
+state. But which object? Enabling debug messages from Direct2D turned out to be simple enough:
+just supply a D2D1_FACTORY_OPTIONS to the CreateFactory function. I set the debug level to be
+xxx_WARNING_xxx; this triggered a breakpoint at the EndDraw() with a message that tells me that
+the render target was NULL at the time of the draw call. So, seems like I didn't set the target
+properly (or at all?).
+
+And hey! DeviceContext->SetTarget was all the was missing! Yay, text rendering is now working!

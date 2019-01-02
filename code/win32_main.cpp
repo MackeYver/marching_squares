@@ -695,9 +695,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         //
         // Direct2D
+        D2D1_FACTORY_OPTIONS Options;
+        Options.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
         ID2D1Factory1 *D2DFactory;
         Result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, // Will only be used in this thread
                                    __uuidof(ID2D1Factory),
+                                   &Options,
                                    (void **)&D2DFactory);
         if (FAILED(Result))
         {
@@ -756,6 +759,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             OutputDebugString(L"Failed to create the D2DBitmap!\n");
             return 1;
         }
+        
+        D2DDeviceContext->SetTarget(D2DBitmap);
+        
         Result = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow, 1.0f), &D2DBrush);
         if (FAILED(Result))
         {
@@ -769,7 +775,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                                  DWRITE_FONT_WEIGHT_NORMAL,
                                                  DWRITE_FONT_STYLE_NORMAL,
                                                  DWRITE_FONT_STRETCH_NORMAL,
-                                                 96.0f/4.0f,
+                                                 96.0f/3.0f,
                                                  L"en-GB",
                                                  &D2DTextFormat);
         if (FAILED(Result))
@@ -912,7 +918,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                          D2DTextLayout,
                                          D2DBrush,
                                          D2D1_DRAW_TEXT_OPTIONS_NONE);
-        D2DDeviceContext->EndDraw();
+        
+        D2D1_TAG Tag1, Tag2;
+        HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
+        if (FAILED(Result))
+        {
+            OutputDebugString(L"EndDraw() failed!\n");
+        }
         
         //
         // Update
