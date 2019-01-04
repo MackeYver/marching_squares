@@ -77,10 +77,15 @@ class MarchingSquares {
     level_count GetLevelCount() const {return Levels.size();}
     level *GetLevel(u32 Index);
     
+    std::vector<int>::const_iterator DataBegin() {return Data.begin();}
+    std::vector<int>::const_iterator DataEnd()   {return Data.end();}
+    std::vector<int>::size_type      DataSize()  {return Data.size();}
+    
     
     //
     // Run the algorithm
     result MarchSquares(std::vector<f32> const &LevelHeights);
+    
     
     protected:
     std::vector<level> Levels;
@@ -88,6 +93,5 @@ class MarchingSquares {
     v2 CellSize;
     u32 CellCountX = 0;
     u32 CellCountY = 0;
-    b32 OriginBottomLeft = true;
 };
 #endif /* Marching_squares_h */

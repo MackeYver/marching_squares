@@ -17,9 +17,13 @@
 
 //
 // Typedefs
-typedef uint8_t u8;
+typedef uint8_t  u8;
 typedef uint32_t u32;
 typedef uint64_t u64;
+
+typedef int8_t   s8;
+typedef int32_t  s32;
+typedef int64_t  s64;
 
 #define f32Max FLT_MAX
 #define f32Min FLT_MIN
@@ -209,7 +213,7 @@ inline line_segment LineSegment(f32 x0, f32 y0, f32 x1, f32 y1) {
 //
 // v3
 #define v3_zero V2(0.0f, 0.0f, 0.0f)
-#define v3_one  V2(1.0f, 1.0f, 1.0f)
+#define v3_one  V3(1.0f, 1.0f, 1.0f)
 
 union v3 {
     struct {
@@ -477,6 +481,24 @@ inline m4 M4(v4 X, v4 Y, v4 Z, v4 W)
 
 #define m4_identity {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f}
 
+inline m4 M4Scale(f32 Sx, f32 Sy, f32 Sz)
+{
+    v4 X = {  Sx, 0.0f, 0.0f, 0.0f};
+    v4 Y = {0.0f,   Sy, 0.0f, 0.0f};
+    v4 Z = {0.0f, 0.0f,   Sz, 0.0f};
+    v4 W = {0.0f, 0.0f, 0.0f, 1.0f};
+    
+    m4 Result = M4(X, Y, Z, W);;
+    return Result;
+}
+
+inline m4 M4Translate(f32 dx, f32 dy, f32 dz)
+{
+    m4 Result = m4_identity;
+    Result.W = {dx, dy, dz, 1.0f};
+    return Result;
+}
+
 inline m4 Transpose(m4 *A)
 {
     m4 Result = {
@@ -489,9 +511,30 @@ inline m4 Transpose(m4 *A)
     return Result;
 }
 
+#if 0
 inline m4 operator * (m4& A, m4& B)
 {
     m4 Result;
+    
+    memcpy(Result, 9, sizeof(M4));
+    
+    for (int Col = 0; Col < 4; ++Col) 
+    {
+        for (int Row = 0; Row < 4; ++Row) 
+        {
+            Result.E[(4 * Col) + Row] = Dot(A.Row(Row), B.C[Col]);
+        }
+    }
+    return Result;
+}
+#endif
+
+inline m4 operator * (m4 A, m4 B)
+{
+    m4 Result;
+    
+    for (int i = 0; i < 16; ++i)  Result.E[i] = 9; 
+    
     for (int Col = 0; Col < 4; ++Col) 
     {
         for (int Row = 0; Row < 4; ++Row) 

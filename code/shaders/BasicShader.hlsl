@@ -1,8 +1,7 @@
 cbuffer ConstantBuffer : register(b0)
 {
     float4x4 TransformMatrix;
-	float4 Colour;
-	float3 Padding;
+	float3 Colour;
 	float Z;
 };
 
@@ -19,5 +18,5 @@ float4 vMain(float2 P : POSITION) : SV_POSITION
 // Fragment shader
 float4 pMain() : SV_TARGET
 {
-	return Colour;
+	return float4(Colour, 1.0f);
 }

@@ -211,7 +211,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Config.CellCountY = 5;
         f32 SmallestSize = min((f32)Width / (f32)(Config.CellCountX - 1), (f32)Height / (f32)(Config.CellCountY - 1));
         Config.CellSize = V2(SmallestSize, SmallestSize);
-        Config.SourceHasOriginUpperLeft = false;
+        Config.SourceHasOriginUpperLeft = true;
     }
     MarchingSquares MS(Data, DataCount, Config);
     //std::vector<f32> Heights = {80, 100, 120, 140, 160, 180};
@@ -621,33 +621,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     struct shader_constants
     {
         m4 TransformMatrix;
-        v4 Colour;
-        v3 Padding;
+        v3 Colour;
         f32 Z;
     };
     
     shader_constants ShaderConstants;
     {
         f32 Far = 1.0f;
-        f32 Sx = 2.0f / (f32)Width;
-        f32 Sy = 2.0f / (f32)Height;
-        f32 Sz = 1.0f / Far;
+        f32 Sx  = 2.0f / (f32)Width;
+        f32 Sy  = 2.0f / (f32)Height;
+        f32 Sz  = 1.0f / Far;
         
-        v4 X = {   Sx,  0.0f, 0.0f, 0.0f};
-        v4 Y = { 0.0f,    Sy, 0.0f, 0.0f};
-        v4 Z = { 0.0f,  0.0f,   Sz, 0.0f};
-        v4 W = {-1.0f, -1.0f, 0.0f, 1.0f};
-        
-        ShaderConstants.TransformMatrix = M4(X, Y, Z, W);
-        ShaderConstants.Colour = v4_one;
+        ShaderConstants.TransformMatrix = M4Translate(-1.0f, -1.0f, 0.0f) * M4Scale(Sx, Sy, Sz);
+        ShaderConstants.Colour = v3_one;
         ShaderConstants.Z = 0.0f;
-        assert((sizeof(shader_constants) / 16) % 2 == 0);
+        assert(sizeof(shader_constants) % 16 == 0);
         
         D3D10_BUFFER_DESC BufferDesc;
         BufferDesc.ByteWidth = sizeof(ShaderConstants);    
-        //BufferDesc.Usage = D3D10_USAGE_DYNAMIC;             // We will write stuff to the buffer from the CPU
-        //BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;  // constant buffer
-        //BufferDesc.CPUAccessFlags = D3D10_CPU_ACCESS_WRITE; // CPU write access to the buffer
         BufferDesc.Usage = D3D10_USAGE_DEFAULT;             
         BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;  // constant buffer
         BufferDesc.CPUAccessFlags = 0; 
@@ -680,7 +671,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     ID2D1Bitmap1 *D2DBitmap;
     ID2D1SolidColorBrush *D2DBrush;
     IDWriteTextFormat *D2DTextFormat;
-    IDWriteTextLayout *D2DTextLayout;
     {
         HRESULT Result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, 
                                              __uuidof(IDWriteFactory), 
@@ -762,7 +752,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         D2DDeviceContext->SetTarget(D2DBitmap);
         
-        Result = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow, 1.0f), &D2DBrush);
+        Result = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White, 1.0f), &D2DBrush);
         if (FAILED(Result))
         {
             // TODO(Marcus): Add better error handling
@@ -782,15 +772,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         {
             // TODO(Marcus): Add better error handling
             OutputDebugString(L"Failed to create the D2DTextFormat!\n");
-            return 1;
-        }
-        
-        static WCHAR const *String = L"The quick fox jumped over the lazy dog";
-        Result = DWriteFactory->CreateTextLayout(String, wcslen(String), D2DTextFormat, Width, Height, &D2DTextLayout);
-        if (FAILED(Result))
-        {
-            // TODO(Marcus): Add better error handling
-            OutputDebugString(L"Failed to create the D2DTextLayout!\n");
             return 1;
         }
         
@@ -875,7 +856,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         //
         // Render grid
-        ShaderConstants.Colour = V4(0.2f, 0.2f, 0.2f, 1.0f);
+        ShaderConstants.Colour = V3(0.2f, 0.2f, 0.2f);
         ShaderConstants.Z = 0.3f;
         // Refresh the data in the constant buffer
         Device->UpdateSubresource(ConstantBuffer,   // Resource to update
@@ -895,7 +876,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             // Change the colour
             //u32 NewIndex = Index % ColourCount;
             //ShaderConstants.Colour = Colours[NewIndex];
-            ShaderConstants.Colour = V4(1.0f, 1.0f, 1.0f, 1.0f);
+            ShaderConstants.Colour = V3(1.0f, 1.0f, 1.0f);
             ShaderConstants.Z = 0.0f;
             
             // Refresh the data in the constant buffer
@@ -908,29 +889,67 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             
             Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
             Device->Draw(VertexCount[Index], 0);
-        }
-        
-        
-        //
-        // Render text
-        D2DDeviceContext->BeginDraw();
-        D2DDeviceContext->DrawTextLayout({10.0f, 10.0f},
-                                         D2DTextLayout,
-                                         D2DBrush,
-                                         D2D1_DRAW_TEXT_OPTIONS_NONE);
-        
-        D2D1_TAG Tag1, Tag2;
-        HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
-        if (FAILED(Result))
-        {
-            OutputDebugString(L"EndDraw() failed!\n");
+            
+            //
+            // Render text
+            {
+                D2DDeviceContext->BeginDraw();
+                
+                u32 CellX = MS.GetCellCountX();
+                u32 CellY = MS.GetCellCountY();
+                v2 CellSize = MS.GetCellSize();
+                
+                std::vector<int>::const_iterator Begin = MS.DataBegin();
+                
+                for (u32 y = 0; y < CellY; ++y)
+                {
+                    for (u32 x = 0; x < CellX; ++x)
+                    {
+                        f32 dx = 10.0f;
+                        f32 dy = 10.0f;
+                        
+                        if (x == CellX - 1)
+                        {
+                            dx -= 120.0f;
+                        }
+                        
+                        if (y == 0)
+                        {
+                            dy -= 55.0f;
+                        }
+                        
+                        WCHAR String[10];
+                        swprintf(String, 10, L"(%d-%d) %d", x, y, *(Begin + ((y * CellX) + x)));
+                        
+                        D2D1_RECT_F LayoutRect;
+                        LayoutRect.top  = ((CellY - 1 - y) * CellSize.y) + dy;
+                        LayoutRect.bottom = LayoutRect.top + 400.0f;
+                        LayoutRect.left = (x * CellSize.x) + dx;
+                        LayoutRect.right  = LayoutRect.left + 400.0f;
+                        
+                        D2DDeviceContext->DrawText(String,
+                                                   wcslen(String),
+                                                   D2DTextFormat,
+                                                   &LayoutRect,
+                                                   D2DBrush,
+                                                   D2D1_DRAW_TEXT_OPTIONS_NONE,
+                                                   DWRITE_MEASURING_MODE_NATURAL);
+                    }
+                }
+                
+                D2D1_TAG Tag1, Tag2;
+                HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
+                if (FAILED(Result))
+                {
+                    OutputDebugString(L"EndDraw() failed!\n");
+                }
+            }
         }
         
         //
         // Update
         SwapChain->Present(0, 0);
     }
-    
     
     
     //
@@ -960,7 +979,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Clean up
-    D2DTextLayout->Release();
     D2DTextFormat->Release();
     D2DBrush->Release();
     D2DBitmap->Release();

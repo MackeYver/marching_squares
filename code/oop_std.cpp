@@ -31,15 +31,40 @@ MarchingSquares::level const *MarchingSquares::operator [] (u32 Index) const {
 
 /** @desc Will construct a new instance of MarchingSquares, the vector will be copied. */
 MarchingSquares::MarchingSquares(std::vector<int> const &Heights, config C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY), OriginBottomLeft(C.SourceHasOriginUpperLeft)
+CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
 {
-    copy(Heights.begin(), Heights.end(), back_inserter(Data));
+    if (C.SourceHasOriginUpperLeft)
+    {
+        Data.reserve(CellCountX * CellCountY);
+        for (u32 row = 0; row < CellCountY; ++row)
+        {
+            copy(Heights.begin() + (row * CellCountX), 
+                 Heights.begin() + (row * CellCountX) + CellCountX, 
+                 Data.begin()    + ((CellCountY - 1 - row) * CellCountX));
+        }
+    }
+    else
+    {
+        copy(Heights.begin(), Heights.end(), back_inserter(Data));
+    }
 }
 
 MarchingSquares::MarchingSquares(u32 const *Heights, size_t HeightCount, config const C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY), OriginBottomLeft(C.SourceHasOriginUpperLeft)
+CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
 {
-    copy(Heights, Heights + HeightCount, back_inserter(Data));
+    if (C.SourceHasOriginUpperLeft)
+    {
+        for (s32 SourceRow = CellCountY - 1; SourceRow >= 0; --SourceRow)
+        {
+            copy(Heights + (SourceRow * CellCountX), 
+                 Heights + (SourceRow * CellCountX) + CellCountX, 
+                 back_inserter(Data));
+        }
+    }
+    else
+    {
+        copy(Heights, Heights + HeightCount, back_inserter(Data));
+    }
 }
 
 
@@ -71,15 +96,6 @@ MarchingSquares::level *MarchingSquares::GetLevel(u32 Index) {
 
 /** @desc Utility function, used by "march_squares()" in order to add Line_segments. */
 inline void Add(std::vector<line_segment> *LineSegments, v2 Po, v2 P0, v2 P1) {
-    // @debug {
-    if (isnan(P0.x) || isnan(P0.y) || isinf(P0.x) || isinf(P0.y)) {
-        int a = 0;
-        a++;
-    }
-    if (isnan(P1.x) || isnan(P1.y) || isinf(P1.x) || isinf(P1.y)) {
-        int a = 0;
-        a++;
-    } // } @debug
     LineSegments->push_back(LineSegment(Po + P0, Po + P1));
 }
 
@@ -127,18 +143,18 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
         vector<int>::const_iterator It;
         
         //
-        // @note We are implicit placing the origin in the bottom left.
-        for (u32 y = 0; y < CellCountY - 1; ++y) {
-            for (u32 x = 0; x < CellCountX - 1; ++x) {
+        // Mr. Bus driver, March the Squares!
+        for (u32 x = 0; x < CellCountX - 1; ++x) {
+            for (u32 y = 0; y < CellCountY - 1; ++y) {
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
                 //
                 // Value of data points
-                u32 const BottomLeft  = *(It);
-                u32 const BottomRight = *(It + 1);
-                u32 const TopRight    = *(It + 1 + CellCountX);
-                u32 const TopLeft     = *(It + CellCountX);
+                u32 BottomLeft  = *(It); 
+                u32 BottomRight = *(It + 1);
+                u32 TopRight    = *(It + 1 + CellCountX);
+                u32 TopLeft     = *(It + CellCountX);
                 
                 //
                 // Total sum
@@ -149,10 +165,15 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 
                 //
                 // Vertices, on for each edge of the cell
-                v2 const Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
-                v2 const Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
-                v2 const Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
-                v2 const Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
+                v2 Bottom;
+                v2 Right;
+                v2 Top;
+                v2 Left;
+                
+                Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
+                Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
+                Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
+                Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
