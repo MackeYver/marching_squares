@@ -29,6 +29,8 @@
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
 
 
+#define VOLCANO
+
 
 //
 // Todo:
@@ -41,17 +43,71 @@
 
 
 static f32 const g_BackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
+static b32 gLabelRender = false;
+static u32 gLabelDistance = 1;
+static b32 gLabelCoordinates = false;
+
+static v2 gPadding = V2(20.0f, 20.0f);
 
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 {
     switch (uMsg) {
         case WM_CLOSE: {
             OutputDebugString(L"WM_CLOSE\n");
         } break;
         
+        case WM_PAINT: 
+        {
+            //OutputDebugString(L"WM_PAINT\n");
+            //PAINTSTRUCT Paint;
+            //BeginPaint(hWnd, &Paint);
+            //EndPaint(hWnd, &Paint);
+        } break;
+        
+        case WM_ENTERSIZEMOVE: {
+            static u64 SizeMoveCount = 0;
+            DebugPrint(L"WM_ENTERSIZEMOVE, count = %lld\n", ++SizeMoveCount);
+        } break;
+        
+        case WM_EXITSIZEMOVE: {
+            static u64 ExitSizeMoveCount = 0;
+            DebugPrint(L"WM_EXITSIZEMOVE, count = %lld\n", ++ExitSizeMoveCount);
+        } break;
+        
+        case WM_MOVING: {
+            //static u64 MovingCount = 0;
+            //DebugPrint(L"WM_MOVING, count = %lld\n", ++MovingCount);
+        } break;
+        
+        case WM_MOVE: {
+            //static u64 MoveCount = 0;
+            //DebugPrint(L"WM_MOVE, count = %lld\n", ++MoveCount);
+        } break;
+        
         case WM_SIZE: {
             OutputDebugString(L"WM_SIZE\n");
+        } break;
+        
+        case WM_KEYDOWN: {
+            if (wParam == 0x4C)
+            {
+                gLabelRender = !gLabelRender;
+            }
+            else if (wParam == 0x43)
+            {
+                gLabelCoordinates = !gLabelCoordinates;
+            }
+            else if (wParam >= 0x31 && wParam <= 0x39)
+            {
+                gLabelDistance = wParam - 0x31 + 1;
+                DebugPrint(L"gLabelDistance = %d\n", gLabelDistance);
+            }
+            else if (wParam >= 0x60 && wParam <= 0x69)
+            {
+                gLabelDistance = wParam - 0x60 + 1;
+                DebugPrint(L"gLabelDistance = %d\n", gLabelDistance);
+            }
         } break;
         
         case WM_DESTROY: {
@@ -60,8 +116,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             return 0;
         } break;
         
+        default: {
+            //DebugPrint(L"Message = %d\n", uMsg);
+        } break;
     }
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    
+    return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
 
@@ -76,7 +136,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // Create window
     HWND hWnd;
     {
-        wchar_t const ClassName[] = L"Window Class";
+        wchar_t const ClassName[] = L"MarchingSquares";
         
         WNDCLASS WC;
         
@@ -89,9 +149,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         WC.hCursor = LoadCursor(nullptr, IDC_ARROW);
         WC.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
         WC.lpszMenuName = nullptr;
-        WC.lpszClassName = TEXT("test");
+        WC.lpszClassName = ClassName;
         
-        DWORD Style =  WS_CAPTION | WS_SYSMENU;
+        DWORD Style =  WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
         
         RECT Rect;
         Rect.left = 0;
@@ -106,8 +166,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         }
         
         hWnd = CreateWindow(
-            TEXT("test"),                   /* Class Name */
-            TEXT("test"),                   /* Title */
+            ClassName,                      /* Class Name */
+            TEXT("Marching squares"),       /* Title */
             Style,                          /* Style */
             CW_USEDEFAULT, CW_USEDEFAULT,   /* Position */
             Rect.right - Rect.left, 
@@ -131,8 +191,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 *Data = nullptr;
     u32 DataCount = 0;
     {
-        //HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\volcano.txt",
-        HANDLE File = CreateFileA("c:\\developer\\Marching_squares\\data\\test2.txt",
+#ifdef VOLCANO
+        char const *path = "c:\\developer\\Marching_squares\\data\\volcano.txt";
+        
+#else
+        char const *path = "c:\\developer\\Marching_squares\\data\\test2.txt";
+#endif
+        HANDLE File = CreateFileA(path,
                                   GENERIC_READ,
                                   FILE_SHARE_READ,
                                   nullptr,
@@ -206,16 +271,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Generate lines from data using Marching Squares
     MarchingSquares::config Config;
-    {
-        Config.CellCountX = 5;
-        Config.CellCountY = 5;
-        f32 SmallestSize = min((f32)Width / (f32)(Config.CellCountX - 1), (f32)Height / (f32)(Config.CellCountY - 1));
-        Config.CellSize = V2(SmallestSize, SmallestSize);
-        Config.SourceHasOriginUpperLeft = true;
-    }
-    MarchingSquares MS(Data, DataCount, Config);
-    //std::vector<f32> Heights = {80, 100, 120, 140, 160, 180};
+#ifdef VOLCANO
+    std::vector<f32> Heights = {90, 100, 110, 120, 130, 140, 150, 160, 170};
+    Config.CellCountX = 61;
+    Config.CellCountY = 87;
+#else
     std::vector<f32> Heights = {2, 3};
+    Config.CellCountX = 5;
+    Config.CellCountY = 5;
+#endif
+    {
+        f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(Config.CellCountX - 1), 
+                               (f32)(Height -2*gPadding.y) / (f32)(Config.CellCountY - 1));
+        Config.CellSize = V2(SmallestSize, SmallestSize);
+    }
+    Config.SourceHasOriginUpperLeft = true;
+    
+    MarchingSquares MS(Data, DataCount, Config);
     MS.MarchSquares(Heights);
     
     free(Data);
@@ -482,22 +554,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         u32 CellCountY = MS.GetCellCountY();
         v2 CellSize = MS.GetCellSize();
         
-        VertexCountGridLines = 2 * ((CellCountX + 1) + (CellCountY + 1));
+        VertexCountGridLines = 2 * (CellCountX + CellCountY);
         size_t Size = VertexCountGridLines * sizeof(v2);
         v2 *GridLinesVertices = (v2 *)malloc(Size);
         assert(GridLinesVertices);
         
         u32 DataIndex = 0;
-        for (u32 y = 0; y <= CellCountY; ++y)
+        for (u32 y = 0; y < CellCountY; ++y)
         {
             GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(0, y));
-            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(CellCountX, y));
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(CellCountX - 1, y));
         }
         
-        for (u32 x = 0; x <= CellCountX; ++x)
+        for (u32 x = 0; x < CellCountX; ++x)
         {
             GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, 0));
-            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, CellCountY));
+            GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, CellCountY - 1));
         }
         assert(DataIndex == VertexCountGridLines);
         
@@ -633,6 +705,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         f32 Sz  = 1.0f / Far;
         
         ShaderConstants.TransformMatrix = M4Translate(-1.0f, -1.0f, 0.0f) * M4Scale(Sx, Sy, Sz);
+        ShaderConstants.TransformMatrix = ShaderConstants.TransformMatrix * M4Translate(gPadding.x, gPadding.y, 0.0f);
+        
         ShaderConstants.Colour = v3_one;
         ShaderConstants.Z = 0.0f;
         assert(sizeof(shader_constants) % 16 == 0);
@@ -765,7 +839,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                                  DWRITE_FONT_WEIGHT_NORMAL,
                                                  DWRITE_FONT_STYLE_NORMAL,
                                                  DWRITE_FONT_STRETCH_NORMAL,
-                                                 96.0f/3.0f,
+                                                 96.0f/5.0f,
                                                  L"en-GB",
                                                  &D2DTextFormat);
         if (FAILED(Result))
@@ -774,6 +848,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             OutputDebugString(L"Failed to create the D2DTextFormat!\n");
             return 1;
         }
+        
+        D2DTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        D2DTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        
         
         D2DBuffer->Release();
         DXGIDevice->Release();
@@ -786,6 +864,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // Show and update window
     ShowWindow(hWnd, nShowCmd);
     UpdateWindow(hWnd);
+    
+    
     
     
     
@@ -847,6 +927,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             }
         }
         
+        // @debug
+        //static u64 RenderCount= 0;
+        //DebugPrint(L"Rendering, count = %lld\n", ++RenderCount);
+        
         //
         // Clear
         Device->ClearDepthStencilView(DepthStencilView, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1, 0);
@@ -889,60 +973,65 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             
             Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
             Device->Draw(VertexCount[Index], 0);
+        }
+        
+        //
+        // Render text
+        if (gLabelRender)
+        {
+            D2DDeviceContext->BeginDraw();
             
-            //
-            // Render text
+            u32 CellX = MS.GetCellCountX();
+            u32 CellY = MS.GetCellCountY();
+            v2 CellSize = MS.GetCellSize();
+            
+            std::vector<int>::const_iterator Begin = MS.DataBegin();
+            
+            for (u32 y = 0; y < CellY; y += gLabelDistance)
             {
-                D2DDeviceContext->BeginDraw();
-                
-                u32 CellX = MS.GetCellCountX();
-                u32 CellY = MS.GetCellCountY();
-                v2 CellSize = MS.GetCellSize();
-                
-                std::vector<int>::const_iterator Begin = MS.DataBegin();
-                
-                for (u32 y = 0; y < CellY; ++y)
+                for (u32 x = 0; x < CellX; x += gLabelDistance)
                 {
-                    for (u32 x = 0; x < CellX; ++x)
+                    WCHAR String[20];
+                    if (gLabelCoordinates)
                     {
-                        f32 dx = 10.0f;
-                        f32 dy = 10.0f;
-                        
-                        if (x == CellX - 1)
-                        {
-                            dx -= 120.0f;
-                        }
-                        
-                        if (y == 0)
-                        {
-                            dy -= 55.0f;
-                        }
-                        
-                        WCHAR String[10];
-                        swprintf(String, 10, L"(%d-%d) %d", x, y, *(Begin + ((y * CellX) + x)));
-                        
-                        D2D1_RECT_F LayoutRect;
-                        LayoutRect.top  = ((CellY - 1 - y) * CellSize.y) + dy;
-                        LayoutRect.bottom = LayoutRect.top + 400.0f;
-                        LayoutRect.left = (x * CellSize.x) + dx;
-                        LayoutRect.right  = LayoutRect.left + 400.0f;
-                        
-                        D2DDeviceContext->DrawText(String,
-                                                   wcslen(String),
-                                                   D2DTextFormat,
-                                                   &LayoutRect,
-                                                   D2DBrush,
-                                                   D2D1_DRAW_TEXT_OPTIONS_NONE,
-                                                   DWRITE_MEASURING_MODE_NATURAL);
+                        swprintf(String, 20, L"(%d, %d) %d", x, y, *(Begin + ((y * CellX) + x)));
                     }
+                    else
+                    {
+                        swprintf(String, 20, L"%d", *(Begin + ((y * CellX) + x)));
+                    }
+                    
+                    v2 P = gPadding + Hadamard(CellSize, V2(x, CellY - 1 - y));
+                    
+                    v2 Offset = V2(60.0f, 20.0f);
+                    D2D1_RECT_F LayoutRect;
+                    LayoutRect.top    = P.y - Offset.y;
+                    LayoutRect.left   = P.x - Offset.x;
+                    LayoutRect.bottom = P.y + Offset.y;
+                    LayoutRect.right  = P.x + Offset.x;
+                    
+#if 0
+                    D2DDeviceContext->DrawRectangle(&LayoutRect,
+                                                    D2DBrush,
+                                                    1.0f,
+                                                    nullptr);
+#endif
+                    
+                    D2DDeviceContext->DrawText(String,
+                                               wcslen(String),
+                                               D2DTextFormat,
+                                               &LayoutRect,
+                                               D2DBrush,
+                                               D2D1_DRAW_TEXT_OPTIONS_NONE,
+                                               DWRITE_MEASURING_MODE_NATURAL);
                 }
-                
-                D2D1_TAG Tag1, Tag2;
-                HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
-                if (FAILED(Result))
-                {
-                    OutputDebugString(L"EndDraw() failed!\n");
-                }
+            }
+            
+            D2D1_TAG Tag1, Tag2;
+            HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
+            if (FAILED(Result))
+            {
+                OutputDebugString(L"EndDraw() failed!\n");
             }
         }
         
