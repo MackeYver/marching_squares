@@ -142,7 +142,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     FILE *FileStdOut;
     assert(AllocConsole());
     freopen_s(&FileStdOut, "CONOUT$", "w", stdout);
-    printf("Hello?");
     
     
     // TODO(Marcus): Handle resolution in a proper way
@@ -335,17 +334,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     MarchingSquares MS(Data, DataCount, Config);
     MS.MarchSquares(Heights);
-    
-    OutputDebugString(L"\n**********LineSegments*************\n");
-    u32 LineSegmentCount = 0;
-    for (u32 i = 0; i < MS.GetLevelCount(); ++i)
-    {
-        u32 LevelLineSegmentCount = MS[i]->LineSegments.size();
-        LineSegmentCount += LevelLineSegmentCount;
-        DebugPrint(L"Level %d, number of line segments = %d\n", i, LevelLineSegmentCount);
-    }
-    DebugPrint(L"Total number of line segments = %d\n", LineSegmentCount);
-    OutputDebugString(L"**********LineSegments*************\n\n");
     
     free(Data);
     Data = nullptr;
@@ -556,27 +544,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
+    
     //
-    // Vertexbuffer
-    u32 VertexBufferCount = MS.GetLevelCount();
-    assert(VertexBufferCount > 0);
+    // Vertexbuffers and indexbuffers
+    u32 BufferCount = MS.GetLevelCount();
+    assert(BufferCount > 0);
     
     ID3D10Buffer **VertexBuffers;
-    VertexBuffers = (ID3D10Buffer **)malloc(VertexBufferCount * sizeof(ID3D10Buffer *));
+    VertexBuffers = (ID3D10Buffer **)malloc(BufferCount * sizeof(ID3D10Buffer *));
     assert(VertexBuffers);
     
-    u32 *VertexCount;
-    VertexCount = (u32 *)malloc(VertexBufferCount * sizeof(u32));
-    assert(VertexCount);
+    ID3D10Buffer **IndexBuffers;
+    IndexBuffers = (ID3D10Buffer **)malloc(BufferCount * sizeof(ID3D10Buffer *));
+    assert(IndexBuffers);
     
-    for (u32 Index = 0; Index < VertexBufferCount; ++Index)
+    u32 *IndexCount;
+    IndexCount = (u32 *)malloc(BufferCount * sizeof(u32));
+    assert(IndexCount);
+    
+    for (u32 Index = 0; Index < BufferCount; ++Index)
     {
         MarchingSquares::level *Level = MS[Index];
         assert(Level);
-        size_t Size = Level->LineSegments.size() * sizeof(line_segment);
         
-        VertexCount[Index] = 2 * Level->LineSegments.size();
-        
+        //
+        // Vertexbuffer
+        size_t Size = Level->Vertices.size() * sizeof(v2);
         D3D10_BUFFER_DESC BufferDesc;
         BufferDesc.ByteWidth = Size;                     // size of the buffer
         BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
@@ -585,7 +578,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         BufferDesc.MiscFlags = 0;                        // No other option
         
         D3D10_SUBRESOURCE_DATA InitData;
-        InitData.pSysMem = Level->LineSegments.data();
+        InitData.pSysMem = Level->Vertices.data();
         InitData.SysMemPitch = 0;
         InitData.SysMemSlicePitch = 0;
         
@@ -593,7 +586,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         if (FAILED(Result)) 
         {
             // TODO(Marcus): Add better error handling
-            OutputDebugString(L"Failed to create the Vertex buffer\n");
+            OutputDebugString(L"Failed to create the Vertexbuffer\n");
+            return 1;
+        }
+        
+        
+        //
+        // Indexbuffer
+        IndexCount[Index] = Level->Indices.size();
+        
+        Size = Level->Indices.size() * sizeof(u16);
+        BufferDesc.ByteWidth = Size;                     // size of the buffer
+        BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
+        BufferDesc.BindFlags = D3D10_BIND_INDEX_BUFFER;  // use in vertex shader
+        BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
+        BufferDesc.MiscFlags = 0;                        // No other option
+        
+        InitData.pSysMem = Level->Indices.data();
+        InitData.SysMemPitch = 0;
+        InitData.SysMemSlicePitch = 0;
+        
+        Result = Device->CreateBuffer(&BufferDesc, &InitData, &IndexBuffers[Index]);
+        if (FAILED(Result)) 
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to create the Indexbuffer\n");
             return 1;
         }
     }
@@ -1015,7 +1032,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         //
         // Render levels
-        for (u32 Index = 0; Index < VertexBufferCount; ++Index)
+        for (u32 Index = 0; Index < BufferCount; ++Index)
         {
             // Change the colour
             //u32 NewIndex = Index % ColourCount;
@@ -1032,7 +1049,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                       0);               // Depth pitch (only for textures?)
             
             Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
-            Device->Draw(VertexCount[Index], 0);
+            Device->IASetIndexBuffer(IndexBuffers[Index], DXGI_FORMAT_R16_UINT, 0);
+            Device->DrawIndexed(IndexCount[Index], 0, 0);
         }
         
         //
@@ -1134,17 +1152,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     VertexShader->Release();
     VertexBufferGridLines->Release();
     
-    for (u32 Index = 0; Index < VertexBufferCount; ++Index)
+    for (u32 Index = 0; Index < BufferCount; ++Index)
     {
         VertexBuffers[Index]->Release();
+        IndexBuffers[Index]->Release();
     }
     
     free(VertexBuffers);
     VertexBuffers = nullptr;
-    VertexBufferCount = 0;
     
-    free(VertexCount);
-    VertexCount = nullptr;
+    free(IndexBuffers);
+    IndexBuffers = nullptr;
+    BufferCount = 0;
+    
+    free(IndexCount);
+    IndexCount = nullptr;
     
     RenderTargetView->Release();
     DepthStencilState->Release();

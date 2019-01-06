@@ -10,9 +10,8 @@
 #define Marching_squares_h
 
 #include <vector>
-#include <list>
+#include <map>
 #include "Mathematics.h"
-
 
 
 
@@ -22,9 +21,34 @@ class MarchingSquares {
     public:
     //
     // Types
+    struct line_point
+    {
+        v2 P;
+        u32 LineIndex;
+    };
+    
+    struct line_segment {
+        v2 P0;
+        v2 P1;
+        b32 IsProcessed;
+    };
+    
     struct level {
-        f32 Height;
+        std::vector<v2> Vertices;
+        std::vector<u16> Indices; // 0xFFFF is used as primitive restart index
+        
         std::vector<line_segment> LineSegments;
+        std::map<f32, std::vector<line_point> > LinePoints;
+        
+        f32 Height;
+        u32 LineCount;
+    };
+    
+    struct config {
+        v2  CellSize;
+        u32 CellCountX;
+        u32 CellCountY;
+        b32 SourceHasOriginUpperLeft;
     };
     
     enum result {
@@ -38,21 +62,15 @@ class MarchingSquares {
         NoLineSegments,
     };
     
-    struct config {
-        v2  CellSize;
-        u32 CellCountX;
-        u32 CellCountY;
-        b32 SourceHasOriginUpperLeft;
-    };
+    typedef std::vector<level>::size_type level_count;
     
-    typedef std::vector<level>::size_type        level_count;
-    typedef std::list<line_segment>::size_type   segment_count;
     
     
     //
     // Operator overloading, returns the level at the given index
     level      * operator [] (u32 Index);
     level const* operator [] (u32 Index) const;
+    
     
     
     //
@@ -62,16 +80,16 @@ class MarchingSquares {
     MarchingSquares(std::vector<int> const &Heights, config const Config = {}); // copy constructor
     
     
+    
     //
     // Destructor
-    // The synthesized destructor will be fine, the memory are managed by std::vector and std::list,
-    // which will free the allocated memory in their destructors.
+    // The synthesized destructor will be fine, the memory are managed by std::vector which will 
+    // free the allocated memory in their destructors.
+    
     
     
     //
     // Setters and getters
-    result SetCellSize(v2 NewSize);
-    
     u32 GetCellCountX() const        {return CellCountX;}
     u32 GetCellCountY() const        {return CellCountY;}
     v2  GetCellSize()   const        {return CellSize;}
@@ -84,11 +102,15 @@ class MarchingSquares {
     std::vector<int>::size_type      DataSize()  {return Data.size();}
     
     
+    
     //
     // Run the algorithm
     result MarchSquares(std::vector<f32> const &LevelHeights);
+    result Simplify();
     
     
+    //
+    // Data
     protected:
     std::vector<level> Levels;
     std::vector<int> Data;

@@ -13,11 +13,13 @@
 
 #include <stdint.h>
 #include <math.h>
+#include <float.h>
 
 
 //
 // Typedefs
 typedef uint8_t  u8;
+typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
@@ -74,6 +76,19 @@ inline f32 Tan(f32 const& a) {
 inline f32 Arctan2(f32 const& x, f32 const& y) {
     f32 Result = (f32)atan2(y, x);
     return Result;
+}
+
+inline b32 AlmostEqualRelative(f32 a, f32 b, f32 MaxRelDiff = FLT_EPSILON)
+{
+    // From: https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+    // Calculate the difference.
+    float Diff = fabsf(a - b);
+    a = fabsf(a);
+    b = fabsf(b);
+    float Largest = (b > a) ? b : a;
+    
+    if (Diff <= Largest * MaxRelDiff)  return true;
+    return false;
 }
 
 
@@ -179,32 +194,6 @@ inline v2 NOZ(v2 const& A) {
         Result = A * (1.0f / SquareRoot(l));
     }
     
-    return Result;
-}
-
-
-//
-// Line segments
-union line_segment {
-    struct {
-        v2 P0;
-        v2 P1;
-    };
-    v2 P[2];
-};
-
-inline line_segment LineSegment(v2 const& A, v2 const& B) {
-    line_segment Result;
-    Result.P0 = A;
-    Result.P1 = B;
-    
-    return Result;
-}
-
-inline line_segment LineSegment(f32 x0, f32 y0, f32 x1, f32 y1) {
-    line_segment Result;
-    Result.P0 = V2(x0, y0);
-    Result.P1 = V2(x1, y1);
     return Result;
 }
 

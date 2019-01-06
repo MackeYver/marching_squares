@@ -6,28 +6,39 @@
 #include "oop_std.h"
 
 #include <assert.h>
-#include <algorithm>
+#include <stdio.h>
 
 using namespace std;
 
 
+//
+// Line points
+inline f32 CalculateKey(v2 const& P)
+{
+    // 3847 is a prime, choosen due to it being a bit larger than 3840 which is the width of 4k display.
+    // Admittedly a bit arbitrary, but we need to generate a key to use for sorting somehow and this may
+    // be good enough.
+    return 3847.0f*P.y + P.x;
+}
+
+b32 CompareLinePoints(MarchingSquares::line_point const& a, MarchingSquares::line_point const& b)
+{
+    return CalculateKey(a.P) < CalculateKey(b.P);
+}
+
+b32 Equal(MarchingSquares::line_point const& a, MarchingSquares::line_point const& b)
+{
+    if (AlmostEqualRelative(a.P.x, b.P.x) && AlmostEqualRelative(a.P.y, b.P.y))  return true;
+    return false;
+}
 
 
 
 //
-// Used for merging the lines into line strips
-struct line_point
-{
-    v2 P;
-    u32 LineIndex;
-};
-
-b32 CompareLinePoints(line_point const& a, line_point const& b)
-{
-    return ((3847*a.P.y) + a.P.x) < ((3847*b.P.y) + b.P.x);
+// Line segments
+inline MarchingSquares::line_segment LineSegment(v2 const& A, v2 const& B) {
+    return {A, B, false};
 }
-
-
 
 
 
@@ -94,17 +105,6 @@ CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
 //
 // Setters and getters
 
-/** @desc Sets the size of each cell (i.e. distance between points).
-          Will not recalculate any line_segments by itself, call march_squares() to recalculate.
-          If the new size is 0.0f or smaller it will do nothing and return appropiate error code. */
-MarchingSquares::result MarchingSquares::SetCellSize(v2 NewSize) {
-    if (NewSize.x <= 0.0f)  return InvalidCellCountX;
-    if (NewSize.y <= 0.0f)  return InvalidCellCountY;
-    
-    CellSize = NewSize;
-    return Ok;
-}
-
 /** @desc Get the level with the given index (0-based). Returns nullptr if index is out of bounds. */
 MarchingSquares::level *MarchingSquares::GetLevel(u32 Index) {
     if (Index >= Levels.size())  return nullptr;
@@ -114,21 +114,24 @@ MarchingSquares::level *MarchingSquares::GetLevel(u32 Index) {
 
 
 //
-// The algorithm
+// The algorithm(TM)
 
 /** @desc Utility function, used by "march_squares()" in order to add Line_segments. */
-inline void Add(std::vector<line_segment> *LineSegments, std::vector<line_point>& Points, v2 Po, v2 P0, v2 P1) {
+inline void Add(vector<MarchingSquares::line_segment> *LineSegments, 
+                map<f32, vector<MarchingSquares::line_point> > *Points, v2 Po, v2 P0, v2 P1) {
     u32 LineIndex = LineSegments->size();
     LineSegments->push_back(LineSegment(Po + P0, Po + P1));
     
-    line_point LP;
+    MarchingSquares::line_point LP;
     LP.P = P0;
     LP.LineIndex = LineIndex;
-    Points.push_back(LP);
+    f32 Key = CalculateKey(LP.P);
+    (*Points)[Key].push_back(LP);
     
     LP.P = P1;
     LP.LineIndex = LineIndex;
-    Points.push_back(LP);
+    Key = CalculateKey(LP.P);
+    (*Points)[Key].push_back(LP);
 }
 
 
@@ -170,14 +173,14 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
         level CurrLevel;
         CurrLevel.Height = CurrHeight;
         
-        std::vector<line_point> LP;
+        map<f32, vector<line_point> > *LP = &CurrLevel.LinePoints;
+        vector<line_segment> *LS = &CurrLevel.LineSegments;
         
-        std::vector<line_segment> *LS = &CurrLevel.LineSegments;
         vector<int>::const_iterator Begin = Data.begin();
         vector<int>::const_iterator It;
         
         //
-        // Mr. Bus driver, March the Squares!
+        // March the Squares!
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
                 It = Begin + ((y * CellCountX) + x);
@@ -199,86 +202,75 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 
                 //
                 // Vertices, on for each edge of the cell
-                v2 Bottom;
-                v2 Right;
-                v2 Top;
-                v2 Left;
-                
-                Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
-                Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
-                Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
-                Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
+                v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
+                v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
+                v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
+                v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
                 switch (Sum) {
-                    case 1: { 
-                        Add(LS, LP, P, Left  , Bottom); 
-                    } break;
-                    
-                    case 2: { 
-                        Add(LS, LP, P, Bottom, Right);  
-                    } break;
-                    
-                    case 3: { 
-                        Add(LS, LP, P, Left  , Right);  
-                    } break;
-                    
-                    case 4: { 
-                        Add(LS, LP, P, Right , Top);    
-                    } break;
-                    
-                    case 5: { 
+                    case 1: Add(LS, LP, P, Left  , Bottom);  break;
+                    case 2: Add(LS, LP, P, Bottom, Right);   break;
+                    case 3: Add(LS, LP, P, Left  , Right);   break;
+                    case 4: Add(LS, LP, P, Right , Top);     break;
+                    case 5: {
                         Add(LS, LP, P, Right , Bottom);
-                        Add(LS, LP, P, Left  , Top);    
-                    } break;
-                    
-                    case 6: { 
-                        Add(LS, LP, P, Bottom, Top);    
-                    } break;
-                    
-                    case 7: { 
-                        Add(LS, LP, P, Left  , Top);    
-                    } break;
-                    
-                    case 8: { 
-                        Add(LS, LP, P, Top   , Left);   
-                    } break;
-                    
-                    case 9: { 
-                        Add(LS, LP, P, Top   , Bottom); 
-                    } break;
-                    
+                        Add(LS, LP, P, Left  , Top);}        break;
+                    case 6: Add(LS, LP, P, Bottom, Top);     break;
+                    case 7: Add(LS, LP, P, Left  , Top);     break;
+                    case 8: Add(LS, LP, P, Top   , Left);    break;
+                    case 9: Add(LS, LP, P, Top   , Bottom);  break;
                     case 10: { 
                         Add(LS, LP, P, Bottom, Left);
-                        Add(LS, LP, P, Top   , Right);  
-                    } break;
-                    
-                    case 11: {  
-                        Add(LS, LP, P, Top   , Right);  
-                    } break;
-                    
-                    case 12: { 
-                        Add(LS, LP, P, Right , Left);   
-                    } break;
-                    
-                    case 13: { 
-                        Add(LS, LP, P, Right , Bottom); 
-                    } break;
-                    
-                    case 14: { 
-                        Add(LS, LP, P, Bottom, Left);   
-                    } break;
+                        Add(LS, LP, P, Top   , Right);}      break;
+                    case 11: Add(LS, LP, P, Top   , Right);  break;
+                    case 12: Add(LS, LP, P, Right , Left);   break;
+                    case 13: Add(LS, LP, P, Right , Bottom); break;
+                    case 14: Add(LS, LP, P, Bottom, Left);   break;
                 }
             }
         }
         
-        
-        
-        sort(LP.begin(), LP.end(), CompareLinePoints);
-        
-        if (CurrLevel.LineSegments.size() > 0) {
+        if (CurrLevel.LineSegments.size() > 0)
+        {
+            for (line_segment& CurrLine : *LS)
+            {
+                CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
+                CurrLevel.Vertices.push_back(CurrLine.P0);
+                CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
+                CurrLevel.Vertices.push_back(CurrLine.P1);
+                CurrLevel.Indices.push_back((u16)0xFFFF);
+            }
+            
             Levels.push_back(CurrLevel);
+        }
+    }
+    
+    return Ok;
+}
+
+
+
+MarchingSquares::result MarchingSquares::Simplify()
+{
+    if (Levels.size() == 0)  return NoLineSegments;
+    
+    for (level& CurrLevel : Levels)
+    {
+        vector<line_segment> *LS = &CurrLevel.LineSegments;
+        //map<f32, vector<line_point> > *LP = &CurrLevel.LinePoints;
+        
+        printf("Height %.1f, line segment count = %d, vertex count = %d\n", CurrLevel.Height, LS->size(), 2*LS->size());
+        
+        for (vector<line_segment>::size_type CurrLineIndex = 0;
+             CurrLineIndex < CurrLevel.LineSegments.size();
+             ++CurrLineIndex)
+        {
+            line_segment *CurrLine = &CurrLevel.LineSegments[CurrLineIndex];
+            if (CurrLine->IsProcessed)  continue;
+            
+            
         }
     }
     
