@@ -1,0 +1,13 @@
+#Goals for today:
+
+1. Get a working version of MergeLines (or MergeVertices?) up and running
+
+
+##Sidequest -- getting a console to view output from printf
+---------------------------------------------------------
+I started the day with setting up a console and redirecting the stdout to it. It was actually
+really simple to do so, just to use AllocConsole/FreeConsole and redirecting the output with
+a call: freopen_s(FILE, "CONOUT$", "w", stdout);
+This way I can print debug stuff from files wich do not have access to Windows stuff (oop_stl
+for instance).
+

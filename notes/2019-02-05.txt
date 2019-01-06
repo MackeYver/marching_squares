@@ -11,21 +11,21 @@
 2. Calculate metrics and use it for text layout and to determine at level of detail 
    (i.e. one label for every point or labels on every second point, etc..?)
 
-3. Make it optional for the class to "own" the data? Make it possible to use external
-   data as input.
+3. Find additional data set to use for testing purposes
 
 
 ##1. Fixing two bugs
 ------------------
 
 ###1a. Window not rendering properly
-The rendering is done outside of the WM_PAINT message, actually I was expecting that the
-rendering is all the time. But thinking about it makes me realise that we do loop based
-on PeekMessage, that is, if we _always_ recieve a WM message then we will not render.
+The rendering is done outside of the WM_PAINT message and I was expecting that the 
+rendering is done all the time. But thinking about it makes me realise that we do loop 
+based on PeekMessage, that is, if we _always_ recieve a WM message then we will not 
+render.
 
 ###Hypothesis: when we move the window, we do recieve a consistent stream of WM_MOVE 
-(and possibly related WM_S). Thus we're not exiting the loop around PeekMessage and as a
-result we're not rendering anything.
+(and possibly related window messages). Thus we're not exiting the loop around 
+PeekMessage and as a result we're not rendering anything.
 
 ###Test: print a count of the number of times we recieve the WM_MOVE message and a count 
 of how many times we are rendering. If the WM_MOVE count is increasing all time but not 
@@ -37,7 +37,7 @@ messages; if we're "holding" on to the window, left mouse button pressed on the 
 titlebar, we're not rendering, but we're not receiving WM_MOVE either. So there is some 
 other message as well that's being sent.
 
-Solution: We could probably use WM_ENTERSIZEMOVE/WM_EXITSIZEMOVE, when the Window is 
+###Solution: We could probably use WM_ENTERSIZEMOVE/WM_EXITSIZEMOVE, when the Window is 
 entering a modal loop, we're informed of this via WM_ENTERSIZEMOVE. At this point it is
 probably reasonably to pause the app and start a timer that will keep on rendering to 
 the window (we're not going through the usual render path). This timer will be killed in
@@ -48,7 +48,7 @@ into it's own thing.
 
 
 ###1b. Not producing any results with the volcano data set
-Well... This is a bit akward, I forgot to change the cell count, it was till 5x5 which
+Well... This is a bit akward, I forgot to change the cell count, it was still 5x5 which
 is too small for the volcano data set...
 
 

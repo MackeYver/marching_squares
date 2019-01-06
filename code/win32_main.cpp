@@ -29,7 +29,11 @@
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
 
 
-#define VOLCANO
+#define kDataSet 4
+// 0 test2
+// 1 volcano
+// 2 test3
+// 2 test4
 
 
 //
@@ -46,6 +50,7 @@ static f32 const g_BackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
 static b32 gLabelRender = false;
 static u32 gLabelDistance = 1;
 static b32 gLabelCoordinates = false;
+static b32 gGridRender = true;
 
 static v2 gPadding = V2(20.0f, 20.0f);
 
@@ -94,6 +99,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             {
                 gLabelRender = !gLabelRender;
             }
+            else if (wParam == 0x47)
+            {
+                gGridRender = !gGridRender;
+            }
             else if (wParam == 0x43)
             {
                 gLabelCoordinates = !gLabelCoordinates;
@@ -128,6 +137,14 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine, int nShowCmd) 
 {
+    //
+    // Attach console
+    FILE *FileStdOut;
+    assert(AllocConsole());
+    freopen_s(&FileStdOut, "CONOUT$", "w", stdout);
+    printf("Hello?");
+    
+    
     // TODO(Marcus): Handle resolution in a proper way
     int const Width = 1024;
     int const Height = 1024;
@@ -191,11 +208,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 *Data = nullptr;
     u32 DataCount = 0;
     {
-#ifdef VOLCANO
-        char const *path = "c:\\developer\\Marching_squares\\data\\volcano.txt";
-        
-#else
+#if kDataSet == 0
         char const *path = "c:\\developer\\Marching_squares\\data\\test2.txt";
+#elif kDataSet == 1
+        char const *path = "c:\\developer\\Marching_squares\\data\\volcano.txt";
+#elif kDataSet == 2
+        char const *path = "c:\\developer\\Marching_squares\\data\\test3_123x61.txt";
+#elif kDataSet == 3
+        char const *path = "c:\\developer\\Marching_squares\\data\\test4_175x111.txt";
+#elif kDataSet == 4
+        char const *path = "c:\\developer\\Marching_squares\\data\\test6_11x11.txt";
 #endif
         HANDLE File = CreateFileA(path,
                                   GENERIC_READ,
@@ -233,7 +255,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         u32 SpaceCount = 0;
         for (u32 Index = 0; Index < FileSize.QuadPart; ++Index)
         {
-            if (FileData[Index] == ' ' || FileData[Index] == '\n')  ++SpaceCount;
+            if (isspace(FileData[Index])) 
+            {
+                ++SpaceCount;
+                while (Index < FileSize.QuadPart && isspace(FileData[Index]))
+                {
+                    ++Index;
+                }
+            }
         }
         
         DataCount = SpaceCount + 1; // We're assuming that there is only spaces in between the elements
@@ -244,7 +273,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         u32 DataIndex = 0;
         for (u32 Index = 0; Index < FileSize.QuadPart;)
         {
-            if (!isdigit(FileData[Index]))  continue;
+            if (isspace(FileData[Index]))
+            {
+                ++Index;
+                continue;
+            }
             
             char SmallBuffer[10] = {};
             
@@ -271,14 +304,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Generate lines from data using Marching Squares
     MarchingSquares::config Config;
-#ifdef VOLCANO
-    std::vector<f32> Heights = {90, 100, 110, 120, 130, 140, 150, 160, 170};
-    Config.CellCountX = 61;
-    Config.CellCountY = 87;
-#else
+#if kDataSet == 0
     std::vector<f32> Heights = {2, 3};
     Config.CellCountX = 5;
     Config.CellCountY = 5;
+#elif kDataSet == 1
+    std::vector<f32> Heights = {90, 100, 110, 120, 130, 140, 150, 160, 170};
+    Config.CellCountX = 61;
+    Config.CellCountY = 87;
+#elif kDataSet == 2
+    std::vector<f32> Heights = {10, 20, 40, 60, 80, 100, 120, 140, 160};
+    Config.CellCountX = 123;
+    Config.CellCountY = 61;
+#elif kDataSet == 3
+    std::vector<f32> Heights = {20, 40, 60, 80, 100, 120, 140};
+    Config.CellCountX = 175;
+    Config.CellCountY = 111;
+#elif kDataSet == 4
+    std::vector<f32> Heights = {0, 1, 2, 3, 4};
+    Config.CellCountX = 11;
+    Config.CellCountY = 11;
+    
 #endif
     {
         f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(Config.CellCountX - 1), 
@@ -289,6 +335,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     MarchingSquares MS(Data, DataCount, Config);
     MS.MarchSquares(Heights);
+    
+    OutputDebugString(L"\n**********LineSegments*************\n");
+    u32 LineSegmentCount = 0;
+    for (u32 i = 0; i < MS.GetLevelCount(); ++i)
+    {
+        u32 LevelLineSegmentCount = MS[i]->LineSegments.size();
+        LineSegmentCount += LevelLineSegmentCount;
+        DebugPrint(L"Level %d, number of line segments = %d\n", i, LevelLineSegmentCount);
+    }
+    DebugPrint(L"Total number of line segments = %d\n", LineSegmentCount);
+    OutputDebugString(L"**********LineSegments*************\n\n");
     
     free(Data);
     Data = nullptr;
@@ -940,17 +997,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         //
         // Render grid
-        ShaderConstants.Colour = V3(0.2f, 0.2f, 0.2f);
-        ShaderConstants.Z = 0.3f;
-        // Refresh the data in the constant buffer
-        Device->UpdateSubresource(ConstantBuffer,   // Resource to update
-                                  0,                // Subresource index
-                                  nullptr,          // Destination box, nullptr for the entire buffer 
-                                  &ShaderConstants, // Pointer to the data             
-                                  0,                // Row pitch (only for textures?) 
-                                  0);               // Depth pitch (only for textures?)
-        Device->IASetVertexBuffers(0, 1, &VertexBufferGridLines, &stride, &offset);
-        Device->Draw(VertexCountGridLines, 0);
+        if (gGridRender)
+        {
+            ShaderConstants.Colour = V3(0.2f, 0.2f, 0.2f);
+            ShaderConstants.Z = 0.3f;
+            // Refresh the data in the constant buffer
+            Device->UpdateSubresource(ConstantBuffer,   // Resource to update
+                                      0,                // Subresource index
+                                      nullptr,          // Destination box, nullptr for the entire buffer 
+                                      &ShaderConstants, // Pointer to the data             
+                                      0,                // Row pitch (only for textures?) 
+                                      0);               // Depth pitch (only for textures?)
+            Device->IASetVertexBuffers(0, 1, &VertexBufferGridLines, &stride, &offset);
+            Device->Draw(VertexCountGridLines, 0);
+        }
         
         
         //
@@ -1001,7 +1061,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                         swprintf(String, 20, L"%d", *(Begin + ((y * CellX) + x)));
                     }
                     
-                    v2 P = gPadding + Hadamard(CellSize, V2(x, CellY - 1 - y));
+                    v2 P = gPadding + Hadamard(CellSize, V2(x, y));
+                    P.y = Height - P.y;
                     
                     v2 Offset = V2(60.0f, 20.0f);
                     D2D1_RECT_F LayoutRect;
@@ -1009,13 +1070,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                     LayoutRect.left   = P.x - Offset.x;
                     LayoutRect.bottom = P.y + Offset.y;
                     LayoutRect.right  = P.x + Offset.x;
-                    
-#if 0
-                    D2DDeviceContext->DrawRectangle(&LayoutRect,
-                                                    D2DBrush,
-                                                    1.0f,
-                                                    nullptr);
-#endif
                     
                     D2DDeviceContext->DrawText(String,
                                                wcslen(String),
@@ -1107,6 +1161,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     if (DebugInterface) {
         DebugInterface->Release();
     }
+    
+    FreeConsole();
     
     return msg.wParam;
 }

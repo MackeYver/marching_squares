@@ -5,7 +5,29 @@
 
 #include "oop_std.h"
 
+#include <assert.h>
+#include <algorithm>
+
 using namespace std;
+
+
+
+
+
+//
+// Used for merging the lines into line strips
+struct line_point
+{
+    v2 P;
+    u32 LineIndex;
+};
+
+b32 CompareLinePoints(line_point const& a, line_point const& b)
+{
+    return ((3847*a.P.y) + a.P.x) < ((3847*b.P.y) + b.P.x);
+}
+
+
 
 
 
@@ -76,11 +98,11 @@ CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
           Will not recalculate any line_segments by itself, call march_squares() to recalculate.
           If the new size is 0.0f or smaller it will do nothing and return appropiate error code. */
 MarchingSquares::result MarchingSquares::SetCellSize(v2 NewSize) {
-    if (NewSize.x <= 0.0f)  return invalid_cell_count_x;
-    if (NewSize.y <= 0.0f)  return invalid_cell_count_y;
+    if (NewSize.x <= 0.0f)  return InvalidCellCountX;
+    if (NewSize.y <= 0.0f)  return InvalidCellCountY;
     
     CellSize = NewSize;
-    return ok;
+    return Ok;
 }
 
 /** @desc Get the level with the given index (0-based). Returns nullptr if index is out of bounds. */
@@ -95,8 +117,18 @@ MarchingSquares::level *MarchingSquares::GetLevel(u32 Index) {
 // The algorithm
 
 /** @desc Utility function, used by "march_squares()" in order to add Line_segments. */
-inline void Add(std::vector<line_segment> *LineSegments, v2 Po, v2 P0, v2 P1) {
+inline void Add(std::vector<line_segment> *LineSegments, std::vector<line_point>& Points, v2 Po, v2 P0, v2 P1) {
+    u32 LineIndex = LineSegments->size();
     LineSegments->push_back(LineSegment(Po + P0, Po + P1));
+    
+    line_point LP;
+    LP.P = P0;
+    LP.LineIndex = LineIndex;
+    Points.push_back(LP);
+    
+    LP.P = P1;
+    LP.LineIndex = LineIndex;
+    Points.push_back(LP);
 }
 
 
@@ -125,18 +157,20 @@ inline f32 Lerp(f32 Length, u32 H0, u32 H1, f32 CurrentHeight) {
 /** @desc Executes the algorithm. Requires that data_ptr != nullptr, width >= 2, height >= 2.
           The resultant line segments will be in a "unit square", i.e. x : [0, 1], y : [0, 1] */
 MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &LevelHeights) {
-    if (Data.size() <= 0)          return no_data;
-    if (CellCountX < 2)           return invalid_cell_count_x;
-    if (CellCountY < 2)           return invalid_cell_count_y;
-    if (CellSize.x <= 0.0f)        return invalid_cell_size;
-    if (CellSize.y <= 0.0f)        return invalid_cell_size;
-    if (LevelHeights.size() == 0)  return invalid_level_height;
+    if (Data.size() <= 0)          return NoData;
+    if (CellCountX < 2)            return InvalidCellCountX;
+    if (CellCountY < 2)            return InvalidCellCountY;
+    if (CellSize.x <= 0.0f)        return InvalidCellSize;
+    if (CellSize.y <= 0.0f)        return InvalidCellSize;
+    if (LevelHeights.size() == 0)  return InvalidLevelHeight;
     
     Levels.clear();
     
     for (auto& CurrHeight : LevelHeights) {
         level CurrLevel;
         CurrLevel.Height = CurrHeight;
+        
+        std::vector<line_point> LP;
         
         std::vector<line_segment> *LS = &CurrLevel.LineSegments;
         vector<int>::const_iterator Begin = Data.begin();
@@ -179,72 +213,74 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 
                 switch (Sum) {
                     case 1: { 
-                        Add(LS, P, Left  , Bottom); 
+                        Add(LS, LP, P, Left  , Bottom); 
                     } break;
                     
                     case 2: { 
-                        Add(LS, P, Bottom, Right);  
+                        Add(LS, LP, P, Bottom, Right);  
                     } break;
                     
                     case 3: { 
-                        Add(LS, P, Left  , Right);  
+                        Add(LS, LP, P, Left  , Right);  
                     } break;
                     
                     case 4: { 
-                        Add(LS, P, Right , Top);    
+                        Add(LS, LP, P, Right , Top);    
                     } break;
                     
                     case 5: { 
-                        Add(LS, P, Right , Bottom);
-                        Add(LS, P, Left  , Top);    
+                        Add(LS, LP, P, Right , Bottom);
+                        Add(LS, LP, P, Left  , Top);    
                     } break;
                     
                     case 6: { 
-                        Add(LS, P, Bottom, Top);    
+                        Add(LS, LP, P, Bottom, Top);    
                     } break;
                     
                     case 7: { 
-                        Add(LS, P, Left  , Top);    
+                        Add(LS, LP, P, Left  , Top);    
                     } break;
                     
                     case 8: { 
-                        Add(LS, P, Top   , Left);   
+                        Add(LS, LP, P, Top   , Left);   
                     } break;
                     
                     case 9: { 
-                        Add(LS, P, Top   , Bottom); 
+                        Add(LS, LP, P, Top   , Bottom); 
                     } break;
                     
                     case 10: { 
-                        Add(LS, P, Bottom, Left);
-                        Add(LS, P, Top   , Right);  
+                        Add(LS, LP, P, Bottom, Left);
+                        Add(LS, LP, P, Top   , Right);  
                     } break;
                     
                     case 11: {  
-                        Add(LS, P, Top   , Right);  
+                        Add(LS, LP, P, Top   , Right);  
                     } break;
                     
                     case 12: { 
-                        Add(LS, P, Right , Left);   
+                        Add(LS, LP, P, Right , Left);   
                     } break;
                     
                     case 13: { 
-                        Add(LS, P, Right , Bottom); 
+                        Add(LS, LP, P, Right , Bottom); 
                     } break;
                     
                     case 14: { 
-                        Add(LS, P, Bottom, Left);   
+                        Add(LS, LP, P, Bottom, Left);   
                     } break;
                 }
             }
         }
+        
+        
+        
+        sort(LP.begin(), LP.end(), CompareLinePoints);
+        
         if (CurrLevel.LineSegments.size() > 0) {
             Levels.push_back(CurrLevel);
         }
     }
     
-    return ok;
+    return Ok;
 }
-
-
-

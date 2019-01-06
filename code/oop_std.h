@@ -15,6 +15,7 @@
 
 
 
+
 //
 // Base class
 class MarchingSquares {
@@ -27,13 +28,14 @@ class MarchingSquares {
     };
     
     enum result {
-        ok,
-        no_data,
-        invalid_cell_count_x,
-        invalid_cell_count_y,
-        invalid_cell_size,
-        invalid_renderer,
-        invalid_level_height,
+        Ok = 0,
+        NoData,
+        InvalidCellCountX,
+        InvalidCellCountY,
+        InvalidCellSize,
+        InvalidRenderer,
+        InvalidLevelHeight,
+        NoLineSegments,
     };
     
     struct config {
