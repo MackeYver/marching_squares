@@ -131,9 +131,19 @@ inline v2 operator + (v2 const& A, v2 const& B) {
     return Result;
 }
 
+inline v2 operator += (v2& A, v2 const& B) {
+    A = V2(A.x + B.x, A.y + B.y);
+    return A;
+}
+
 inline v2 operator - (v2 const& A, v2 const& B) {
     v2 Result = V2(A.x - B.x, A.y - B.y);
     return Result;
+}
+
+inline v2 operator -= (v2& A, v2 const& B) {
+    A = V2(A.x - B.x, A.y - B.y);
+    return A;
 }
 
 inline v2 Hadamard(v2 const& A, v2 const& B) {
@@ -151,6 +161,11 @@ inline f32 Dot(v2 const& A, v2 const& B) {
 inline v2 operator * (v2 const& A, float const& b) {
     v2 Result = V2(A.x * b, A.y * b);
     return Result;
+}
+
+inline v2 operator *= (v2& A, float const& b) {
+    A= V2(A.x * b, A.y * b);
+    return A;
 }
 
 inline v2 operator * (float const& b, v2 const& A) {

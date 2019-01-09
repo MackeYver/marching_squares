@@ -21,16 +21,15 @@ class MarchingSquares {
     public:
     //
     // Types
+    struct line_segment {
+        v2 P[2];
+        b32 IsProcessed;
+    };
+    
     struct line_point
     {
         v2 P;
         u32 LineIndex;
-    };
-    
-    struct line_segment {
-        v2 P0;
-        v2 P1;
-        b32 IsProcessed;
     };
     
     struct level {
@@ -38,7 +37,7 @@ class MarchingSquares {
         std::vector<u16> Indices; // 0xFFFF is used as primitive restart index
         
         std::vector<line_segment> LineSegments;
-        std::map<f32, std::vector<line_point> > LinePoints;
+        std::map<u32, std::vector<line_point> > LinePoints;
         
         f32 Height;
         u32 LineCount;

@@ -29,11 +29,12 @@
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
 
 
-#define kDataSet 4
+#define kDataSet 3
 // 0 test2
 // 1 volcano
 // 2 test3
-// 2 test4
+// 3 test4
+// 4 test6
 
 
 //
@@ -62,14 +63,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             OutputDebugString(L"WM_CLOSE\n");
         } break;
         
-        case WM_PAINT: 
-        {
-            //OutputDebugString(L"WM_PAINT\n");
-            //PAINTSTRUCT Paint;
-            //BeginPaint(hWnd, &Paint);
-            //EndPaint(hWnd, &Paint);
-        } break;
-        
         case WM_ENTERSIZEMOVE: {
             static u64 SizeMoveCount = 0;
             DebugPrint(L"WM_ENTERSIZEMOVE, count = %lld\n", ++SizeMoveCount);
@@ -78,16 +71,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_EXITSIZEMOVE: {
             static u64 ExitSizeMoveCount = 0;
             DebugPrint(L"WM_EXITSIZEMOVE, count = %lld\n", ++ExitSizeMoveCount);
-        } break;
-        
-        case WM_MOVING: {
-            //static u64 MovingCount = 0;
-            //DebugPrint(L"WM_MOVING, count = %lld\n", ++MovingCount);
-        } break;
-        
-        case WM_MOVE: {
-            //static u64 MoveCount = 0;
-            //DebugPrint(L"WM_MOVE, count = %lld\n", ++MoveCount);
         } break;
         
         case WM_SIZE: {
@@ -334,6 +317,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     MarchingSquares MS(Data, DataCount, Config);
     MS.MarchSquares(Heights);
+    MS.Simplify();
     
     free(Data);
     Data = nullptr;
@@ -370,7 +354,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                             D3D10_FEATURE_LEVEL_10_0,    // Feature level
                                             D3D10_1_SDK_VERSION,         // Version of the SDK
                                             &Device);                    // Pointer to the device
-        if (FAILED(Result) || !Device) 
+        if (FAILED(Result) || !Device)
         {
             OutputDebugString(L"Failed to create device!\n");
             return 1;
@@ -947,7 +931,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // The main loop
     u32 const stride = sizeof(v2);
     u32 const offset = 0;
-    Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
     
 #if 0
     static v4 const Colours[] = 
@@ -1026,6 +1009,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                       0,                // Row pitch (only for textures?) 
                                       0);               // Depth pitch (only for textures?)
             Device->IASetVertexBuffers(0, 1, &VertexBufferGridLines, &stride, &offset);
+            Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
             Device->Draw(VertexCountGridLines, 0);
         }
         
@@ -1050,6 +1034,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             
             Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
             Device->IASetIndexBuffer(IndexBuffers[Index], DXGI_FORMAT_R16_UINT, 0);
+            Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
             Device->DrawIndexed(IndexCount[Index], 0, 0);
         }
         

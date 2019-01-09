@@ -8,8 +8,8 @@
 ---------------------------------------------------------
 I started the day with setting up a console and redirecting the stdout to it. It was actually
 really simple to do so, just to use AllocConsole/FreeConsole and redirecting the output with
-a call: freopen_s(FILE, "CONOUT$", "w", stdout);
-This way I can print debug stuff from files wich do not have access to Windows stuff (oop_stl
+a call: freopen_s(FILE, "CONOUT$", "w", stdout); (and/or CONIN$ for the input)
+This way I can printf debug stuff from files wich do not have access to Windows stuff (oop_stl
 for instance).
 
 
@@ -20,10 +20,10 @@ The reason for wanting to merge the lines is to reduce the size of the data. We 
 spend only one draw call in the rendering of the lines, so we'll have to keep that in mind as
 well.
 
-In order to use poly lines we need to change the data structures a bit; instead of having one
-list which stores all the line segments (two vertices per line segment) we'll divide it into
-two buffers: one that stores all the vertices (unique) and one that stores the indices for
-each poly line. 
+In order to use polylines we need to change the data structures a bit; instead of having one
+std::vector which stores all the line segments (two vertices per line segment) we'll divide it 
+into two buffers: one that stores all the vertices (unique) and one that stores the indices 
+foreach poly line. 
 We will store _all_ the vertices and indices in one buffer per level, meaning that we'll have
 >=1 poly line per buffer. In order to render this with one draw call we need to tell the API
 when to re-start the primitive. This is known as "primitive restart" and specifically 
@@ -40,11 +40,11 @@ https://www.khronos.org/opengl/wiki/Vertex_Rendering#Primitive_Restart
 https://developer.apple.com/documentation/metal/mtlrendercommandencoder/1515542-drawindexedprimitives
 https://docs.microsoft.com/en-us/windows/desktop/direct3d11/d3d10-graphics-programming-guide-primitive-topologies
 
-We're storing the line segments in a vector, and each line segment consist of two v2's. This
-changes to storing two vectors; one which is the same as before and one vector which stores a
-new struct: line_point. This struct stores two v2's (copies of the vertices for each line
-segment and an index -- an index into the line segment vector, which identifies which line
-segment the vertices belongs to.
+We're storing the line segments in a std::vector, and each line segment consist of two v2's. 
+This changes to storing two std::vectors; one which is the same as before and one vector which 
+stores a new struct: line_point. This struct stores two v2's (copies of the vertices for each 
+linesegment and an index -- an index into the line segment vector, which identifies which 
+linesegment the vertices belongs to.
 This is probably not particulary optimal. There are perhaps other ways of doing this in order
 to reduce the footprint, but those optimisations will have to wait a bit.
 

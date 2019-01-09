@@ -1,0 +1,7 @@
+#Goal of today:
+
+1. Completing the Simplify() method
+
+
+##1. Completing the Simply() method
+---------------------------------
