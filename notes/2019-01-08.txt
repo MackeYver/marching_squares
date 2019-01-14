@@ -5,3 +5,40 @@
 
 ##1. Completing the Simply() method
 ---------------------------------
+First, the idea is that we should find all connected lines and from them form a polyline, a chain
+of lines. Also, if two sequential lines have the same slope, the could be merged into one and thus
+reduce the size with at least one vertex and one index.
+
+In order to achieve this we'll need some auxiliary structures and storage. The  first version is 
+using the standard library (in OOP style) and thus, we'll use std::vector and std::map. 
+  Each line segment have two vertices and we'll store both vertices in the map. This map will be
+used for checking which points lies at a specific coordinate (by first calculating the key from
+the coordinate and then find the vectors of points with that key. Each point will also have a 
+reference to its line, this way we can find the line segment that a point in the map belongs to.
+
+We will start with the first line segment in the std::vector with all the line segments, and add 
+the first vertex of that line to the std::vector that will hold the final output (we'll have one
+std::vector for vertices and one for the indices. The indices of every line is simply the index
+of the std::vector with the vertices).
+
+In order to to find the next connected line to the current line segment, we'll take the second 
+vertex and calculate a key from that. Using this key we'll retrieve the std::vector in the map.
+This std::vector contains all the points with the given key and since we calculated the key 
+from the point's coordinates this also means that the std::vector contains all the points at 
+this coordinate. This means that the std::vector should always contain at least one point.
+  We'll iterate through the std::vector until we either find a point which is from another line
+than the current line, or we reach the end of the std::vector. If we reach the end without
+finding a point for a different line then we know that there are no more lines connecting to 
+the current line.
+If we find another point we repeat the process until we reach the end of the line (literally!).
+
+Once we found the end we'll re-start the process with the first line but looking in the other
+direction. Once we found the end in that direction as well, then we have found all the lines
+that belongs to this polyline. To mark the end of this we'll add the index 0xFFFF which
+signifies "primite restart", i.e. the graphics API will know that we have reached the end of 
+the line.
+
+Rinse and repeat.
+
+The current version is the first working version and is not optimized at all, we'll save that
+for later.
