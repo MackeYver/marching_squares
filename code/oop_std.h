@@ -36,9 +36,6 @@ class MarchingSquares {
         std::vector<v2> Vertices;
         std::vector<u16> Indices; // 0xFFFF is used as primitive restart index
         
-        std::vector<line_segment> LineSegments;
-        std::map<u32, std::vector<line_point> > LinePoints;
-        
         f32 Height;
         u32 LineCount;
     };
@@ -105,7 +102,6 @@ class MarchingSquares {
     //
     // Run the algorithm
     result MarchSquares(std::vector<f32> const &LevelHeights);
-    result Simplify();
     
     
     //

@@ -1,0 +1,16 @@
+Goal of the day:
+1. Pull out the DirectX code into its own thing
+2. Implement some way of measuring performance (RTSCD)
+
+
+
+##1. Pull out the DirectX code into its own thing
+-----------------------------------------------
+We want to start profiling and measuring performance of the implementation and it seems
+lika a good idea to structure it so that it's easy to run the implementaiton several 
+times in a row but with different inputs. Pulling out the DirectX code is a good start.
+
+
+
+##2. Implement some way of measuring performance (RTSCD)
+------------------------------------------------------

@@ -1,0 +1,47 @@
+#Goal of the day:
+1. Gather metrics about the result of the Simplify() method
+2. Merging the MarchSquares() and the Simplify() methods
+
+
+
+##1. Gather metrics about the result of the Simplify() method
+-----------------------------------------------------------
+
+Reduction of vertex count
+
+    Input    |   Polylines  |  Polylines  
+             |              |  & Welding  
+-------------|--------------|-------------
+   11 x  11  |    23.3%     |  33.8%  ( 8.1% less lines)
+   61 x  87  |    32.1%     |  37.8%  (11.5% less lines)
+  123 x  61  |    31.1%     |  32.9%  ( 3.6% less lines)
+  175 x 111  |    33.0%     |  34.8%  ( 3.7% less lines)
+   11 x  11  |    26.8%     |  30.5%  ( 7.2% less lines)    
+  Average    |    29.3%     |  34.0%  ( 6.8% less lines) 
+
+
+Reduction of index count
+
+    Input    |   Polylines  |  Polylines  
+             |              |  & Welding  
+-------------|--------------|-------------
+   11 x  11  |    31.1%     |   27.4%    
+   61 x  87  |    42.7%     |   46.6%    
+  123 x  61  |    41.5%     |   42.7%    
+  175 x 111  |    44.0%     |   45.2%    
+   11 x  11  |    35.8%     |   38.2%    
+  Average    |    39.0%     |   40.0% 
+
+
+In average, the Simplify() method reduces the vertex count with 29.3%, the index count
+with 39.0% and reduces the number of line segments with 6.8%. Not too shabby!
+Well, I only used five test cases and they are a bit arbitrary, but there are a least
+two test cases with real world data, the cases 123x61 and 175x111 and they are 
+actually the cases in which the reduction is greatest. So yeah, this is definitely 
+worth it.
+
+
+
+##2. Merging the MarchSquares() and the Simplify() methods
+--------------------------------------------------------
+Merged! Nothing troublesome or exciting with this step.
