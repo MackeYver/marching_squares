@@ -41,13 +41,6 @@
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
 
 
-#define kDataSet 3
-// 0 test2
-// 1 volcano
-// 2 test3
-// 3 test4
-// 4 test6
-
 
 //
 // Todo:
@@ -59,13 +52,184 @@
 
 
 
-static f32 const g_BackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
+static f32 const gBackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
 static b32 gLabelRender = false;
 static u32 gLabelDistance = 1;
 static b32 gLabelCoordinates = false;
 static b32 gGridRender = true;
+static u32 gRenderIndex = 0;
+static u32 gDataCount = 0;
+
 
 static v2 gPadding = V2(20.0f, 20.0f);
+
+
+
+b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
+{
+    assert(PathAndName);
+    assert(Data);
+    assert(DataSize);
+    
+    HANDLE File = CreateFileA(PathAndName,
+                              GENERIC_READ,
+                              FILE_SHARE_READ,
+                              nullptr,
+                              OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+    if (File == INVALID_HANDLE_VALUE)
+    {
+        DWORD Error = GetLastError();
+        DebugPrint(L"Failed to open file, error: %d\n", Error);
+        return false;
+    }
+    
+    LARGE_INTEGER FileSize;
+    GetFileSizeEx(File, &FileSize);
+    assert(FileSize.QuadPart > 0);
+    
+    char *FileData = (char *)malloc((size_t)FileSize.QuadPart);
+    assert(FileData);
+    
+    DWORD BytesRead = 0;
+    if (!ReadFile(File, FileData, (DWORD)FileSize.QuadPart, &BytesRead, nullptr) || BytesRead != FileSize.QuadPart)
+    {
+        CloseHandle(File);
+        DWORD Error = GetLastError();
+        DebugPrint(L"Failed to read from file, error: %d", Error);
+        return false;
+    }
+    
+    CloseHandle(File);
+    
+    // Count the number of elements
+    u32 SpaceCount = 0;
+    for (u32 Index = 0; Index < FileSize.QuadPart; ++Index)
+    {
+        if (isspace(FileData[Index])) 
+        {
+            ++SpaceCount;
+            while (Index < FileSize.QuadPart && isspace(FileData[Index]))
+            {
+                ++Index;
+            }
+        }
+    }
+    
+    *DataSize = SpaceCount + 1; // We're assuming that there is only spaces in between the elements
+    *Data = (u32 *)malloc(*DataSize * sizeof(u32));
+    assert(*Data);
+    
+    // Proccess the read data, i.e. convert to u32
+    u32 DataIndex = 0;
+    for (u32 Index = 0; Index < FileSize.QuadPart;)
+    {
+        if (isspace(FileData[Index]))
+        {
+            ++Index;
+            continue;
+        }
+        
+        char SmallBuffer[10] = {};
+        
+        u32 EndIndex = Index;
+        while (EndIndex < FileSize.QuadPart && FileData[EndIndex] != ' ' && FileData[EndIndex] != '\n') {
+            ++EndIndex;
+        }
+        
+        assert(EndIndex != Index);
+        assert(EndIndex - Index < 10);
+        
+        memcpy(SmallBuffer, &FileData[Index], EndIndex - Index);
+        sscanf_s(SmallBuffer, "%d", &(*Data)[DataIndex++]);
+        
+        Index = EndIndex + 1;
+    }
+    assert(DataIndex == *DataSize);
+    
+    free(FileData);
+    
+    return true;
+}
+
+
+
+void SetupDirectX(directx_state *State, directx_config *Config)
+{
+    assert(State);
+    
+    CreateDevice(State);
+    CreateSwapChain(State, Config);
+    CreateDepthAndStencilbuffers(State);
+    CreateRenderTargetView(State);
+    SetViewport(State);
+    
+    //
+    // Vertex shader
+    CreateShader(State, "shaders\\BasicVertexShader.cso", &State->VertexShader);
+    UseShader(State, &State->VertexShader);
+    
+    //
+    // Pixel shader
+    CreateShader(State, "shaders\\BasicPixelShader.cso", &State->PixelShader);
+    UseShader(State, &State->PixelShader);
+}
+
+
+
+b32 SetupBuffers(directx_state *State,
+                 MarchingSquares *MS,
+                 directx_renderable_indexed *ContourLines, 
+                 directx_renderable *GridLines)
+{
+    assert(ContourLines);
+    assert(GridLines);
+    
+    //
+    // Contour lines
+    b32 Result = CreateRenderable(State,
+                                  ContourLines,
+                                  MS->GetVertexData()->data(), sizeof(v2) , MS->GetVertexCount(),
+                                  MS->GetIndexData()->data() , sizeof(u16), MS->GetIndexCount(),
+                                  D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
+    assert(Result);
+    
+    
+    //
+    // Gridlines
+    u32 CellCountX = MS->GetCellCountX();
+    u32 CellCountY = MS->GetCellCountY();
+    v2 CellSize = MS->GetCellSize();
+    
+    u32 VertexCountGridLines = 2 * (CellCountX + CellCountY);
+    size_t Size = VertexCountGridLines * sizeof(v2);
+    v2 *GridLineVertices = (v2 *)malloc(Size);
+    assert(GridLineVertices);
+    
+    u32 DataIndex = 0;
+    for (u32 y = 0; y < CellCountY; ++y)
+    {
+        GridLineVertices[DataIndex++] = Hadamard(CellSize, V2(0, y));
+        GridLineVertices[DataIndex++] = Hadamard(CellSize, V2(CellCountX - 1, y));
+    }
+    
+    for (u32 x = 0; x < CellCountX; ++x)
+    {
+        GridLineVertices[DataIndex++] = Hadamard(CellSize, V2(x, 0));
+        GridLineVertices[DataIndex++] = Hadamard(CellSize, V2(x, CellCountY - 1));
+    }
+    assert(DataIndex == VertexCountGridLines);
+    
+    CreateRenderable(State, GridLines, 
+                     GridLineVertices, sizeof(v2), VertexCountGridLines,
+                     D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
+    
+    free(GridLineVertices);
+    
+    return true;
+}
+
 
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
@@ -97,6 +261,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             else if (wParam == 0x47) // Key G
             {
                 gGridRender = !gGridRender;
+            }
+            else if (wParam == 0x49) // Key I
+            {
+                gRenderIndex = ++gRenderIndex % gDataCount;
             }
             else if (wParam == 0x43) // Key C
             {
@@ -197,874 +365,349 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
+    
+    //
+    // Init DirectX 10
+    directx_state DirectXState = {};
+    
+    directx_config Config;
+    Config.Width = Width;
+    Config.Height = Height;
+    Config.hWnd = hWnd;
+    
+    SetupDirectX(&DirectXState, &Config);
+    
+    
+    
     //
     // Read data from file (using Win32)
-    u32 *Data = nullptr;
-    u32 DataCount = 0;
+    char const *AllPaths[] = 
     {
-#if kDataSet == 0
-        char const *path = "c:\\developer\\Marching_squares\\data\\test.txt";
-#elif kDataSet == 1
-        char const *path = "c:\\developer\\Marching_squares\\data\\volcano.txt";
-#elif kDataSet == 2
-        char const *path = "c:\\developer\\Marching_squares\\data\\test3_123x61.txt";
-#elif kDataSet == 3
-        char const *path = "c:\\developer\\Marching_squares\\data\\test4_175x111.txt";
-#elif kDataSet == 4
-        char const *path = "c:\\developer\\Marching_squares\\data\\test6_11x11.txt";
-#endif
-        HANDLE File = CreateFileA(path,
-                                  GENERIC_READ,
-                                  FILE_SHARE_READ,
-                                  nullptr,
-                                  OPEN_EXISTING,
-                                  FILE_ATTRIBUTE_NORMAL,
-                                  nullptr);
-        if (File == INVALID_HANDLE_VALUE)
-        {
-            DWORD Error = GetLastError();
-            DebugPrint(L"Failed to open file, error: %d\n", Error);
-            return 1;
-        }
-        
-        LARGE_INTEGER FileSize;
-        GetFileSizeEx(File, &FileSize);
-        assert(FileSize.QuadPart > 0);
-        
-        char *FileData = (char *)malloc((size_t)FileSize.QuadPart);
-        assert(FileData);
-        
-        DWORD BytesRead = 0;
-        if (!ReadFile(File, FileData, (DWORD)FileSize.QuadPart, &BytesRead, nullptr) || BytesRead != FileSize.QuadPart)
-        {
-            CloseHandle(File);
-            DWORD Error = GetLastError();
-            DebugPrint(L"Failed to read from file, error: %d", Error);
-            return 1;
-        }
-        
-        CloseHandle(File);
-        
-        // Count the number of elements
-        u32 SpaceCount = 0;
-        for (u32 Index = 0; Index < FileSize.QuadPart; ++Index)
-        {
-            if (isspace(FileData[Index])) 
-            {
-                ++SpaceCount;
-                while (Index < FileSize.QuadPart && isspace(FileData[Index]))
-                {
-                    ++Index;
-                }
-            }
-        }
-        
-        DataCount = SpaceCount + 1; // We're assuming that there is only spaces in between the elements
-        Data = (u32 *)malloc(DataCount * sizeof(u32));
-        assert(Data);
-        
-        // Proccess the read data, i.e. convert to u32
-        u32 DataIndex = 0;
-        for (u32 Index = 0; Index < FileSize.QuadPart;)
-        {
-            if (isspace(FileData[Index]))
-            {
-                ++Index;
-                continue;
-            }
-            
-            char SmallBuffer[10] = {};
-            
-            u32 EndIndex = Index;
-            while (EndIndex < FileSize.QuadPart && FileData[EndIndex] != ' ' && FileData[EndIndex] != '\n') {
-                ++EndIndex;
-            }
-            
-            assert(EndIndex != Index);
-            assert(EndIndex - Index < 10);
-            
-            memcpy(SmallBuffer, &FileData[Index], EndIndex - Index);
-            sscanf_s(SmallBuffer, "%d", &Data[DataIndex++]);
-            
-            Index = EndIndex + 1;
-        }
-        assert(DataIndex == DataCount);
-        
-        free(FileData);
-        FileData = nullptr;
+        "c:\\developer\\Marching_squares\\data\\test.txt",
+        "c:\\developer\\Marching_squares\\data\\volcano.txt",
+        "c:\\developer\\Marching_squares\\data\\test3_123x61.txt",
+        "c:\\developer\\Marching_squares\\data\\test4_175x111.txt",
+        "c:\\developer\\Marching_squares\\data\\test6_11x11.txt"
+    };
+    
+    std::vector<f32> Heights[] =
+    {
+        {1, 2, 3, 4},
+        {90, 100, 110, 120, 130, 140, 150, 160, 170},
+        {10, 20, 40, 60, 80, 100, 120, 140, 160},
+        {20, 40, 60, 80, 100, 120, 140},
+        {0, 1, 2, 3, 4}
+    };
+    
+    u32 CellCounts[] =
+    {
+        11, 11,
+        61, 87,
+        123, 61,
+        175, 111,
+        11, 11
+    };
+    
+    gDataCount = sizeof(AllPaths) / sizeof(*AllPaths);
+    
+    v2 *CellSizes = (v2 *)malloc(gDataCount * sizeof(v2));
+    assert(CellSizes);
+    
+    u32 **Data = nullptr;
+    Data = (u32 **)malloc(gDataCount * sizeof(u32));
+    assert(Data);
+    
+    u32 *DataSize = 0;
+    DataSize = (u32 *)malloc(gDataCount * sizeof(u32));
+    assert(DataSize);
+    
+    // Read heights from text file
+    for (u32 Index = 0; Index < gDataCount; ++Index)
+    {
+        b32 Result = ReadHeightsFromFileWin32(AllPaths[Index], &Data[Index], &DataSize[Index]);
+        assert(Result);
     }
     
-    
-    //
     // Generate lines from data using Marching Squares
-    MarchingSquares::config MSConfig;
-#if kDataSet == 0
-    std::vector<f32> Heights = {1, 2, 3, 4};
-    MSConfig.CellCountX = 11;
-    MSConfig.CellCountY = 11;
-#elif kDataSet == 1
-    std::vector<f32> Heights = {90, 100, 110, 120, 130, 140, 150, 160, 170};
-    MSConfig.CellCountX = 61;
-    MSConfig.CellCountY = 87;
-#elif kDataSet == 2
-    std::vector<f32> Heights = {10, 20, 40, 60, 80, 100, 120, 140, 160};
-    MSConfig.CellCountX = 123;
-    MSConfig.CellCountY = 61;
-#elif kDataSet == 3
-    std::vector<f32> Heights = {20, 40, 60, 80, 100, 120, 140};
-    MSConfig.CellCountX = 175;
-    MSConfig.CellCountY = 111;
-#elif kDataSet == 4
-    std::vector<f32> Heights = {0, 1, 2, 3, 4};
-    MSConfig.CellCountX = 11;
-    MSConfig.CellCountY = 11;
+    MarchingSquares MS;
+    directx_renderable *GridLines;
+    GridLines = (directx_renderable *)calloc(gDataCount, sizeof(directx_renderable));
+    assert(GridLines);
     
-#endif
+    directx_renderable_indexed *ContourLines;
+    ContourLines = (directx_renderable_indexed *)calloc(gDataCount, sizeof(directx_renderable_indexed));
+    assert(ContourLines);
     {
-        f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(MSConfig.CellCountX - 1), 
-                               (f32)(Height -2*gPadding.y) / (f32)(MSConfig.CellCountY - 1));
-        MSConfig.CellSize = V2(SmallestSize, SmallestSize);
-    }
-    
-    MSConfig.SourceHasOriginUpperLeft = true;
-    MarchingSquares MS(Data, DataCount, MSConfig);
-    MS.MarchSquares(Heights);
-    
-    free(Data);
-    Data = nullptr;
-    DataCount = 0;
-    
-    
-    
-    //
-    // DirectX 10
-    //
-    directx_state DirectXState = {};
-    {
-        directx_config Config;
-        Config.Width = Width;
-        Config.Height = Height;
-        Config.hWnd = hWnd;
-        
-        CreateDevice(&DirectXState);
-        CreateSwapChain(&DirectXState, &Config);
-        CreateDepthAndStencilbuffers(&DirectXState);
-        CreateRenderTargetView(&DirectXState);
-        SetViewport(&DirectXState);
-    }
-    
-    
-    //
-    // Vertexbuffers and indexbuffers
-#if 0
-    ID3D10Buffer *VertexBuffer;
-    ID3D10Buffer *IndexBuffer;
-    u32 IndexCount;
-    
-    {
-        u32 TotalVertexCount = 0;
-        u32 TotalIndexCount = 0;
-        for (u32 Index = 0; Index < MS.GetLevelCount(); ++Index)
+        MarchingSquares::config MSConfig;
+        for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            MarchingSquares::level *CurrLevel = MS[Index];
-            TotalVertexCount += CurrLevel->Vertices.size();
-            TotalIndexCount += CurrLevel->Indices.size();
+            MSConfig.CellCountX = CellCounts[2 * Index];
+            MSConfig.CellCountY = CellCounts[2 * Index + 1];
+            
+            f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(MSConfig.CellCountX - 1), 
+                                   (f32)(Height -2*gPadding.y) / (f32)(MSConfig.CellCountY - 1));
+            MSConfig.CellSize = V2(SmallestSize, SmallestSize);
+            CellSizes[Index] = MSConfig.CellSize;
+            
+            MSConfig.SourceHasOriginUpperLeft = true;
+            
+            //MS.CopyData(Data[kDataSet], DataSize[kDataSet], &MSConfig);
+            MS.SetDataPtr(Data[Index], &MSConfig);
+            int Result = MS.MarchSquares(Heights[Index]);
+            assert(Result == MarchingSquares::Ok);
+            
+            //
+            // Buffers
+            //
+            SetupBuffers(&DirectXState, &MS, &ContourLines[Index], &GridLines[Index]);
         }
+    }
+    
+    
+    
+    //
+    // Constant buffer, used by the shaders
+    directx_buffer ConstantBuffer;
+    
+    struct shader_constants
+    {
+        m4 TransformMatrix;
+        v3 Colour;
+        f32 Z;
+    };
+    
+    shader_constants ShaderConstants;
+    {
+        f32 Far = 1.0f;
+        f32 Sx  = 2.0f / (f32)Width;
+        f32 Sy  = 2.0f / (f32)Height;
+        f32 Sz  = 1.0f / Far;
         
+        ShaderConstants.TransformMatrix = M4Translate(-1.0f, -1.0f, 0.0f) * M4Scale(Sx, Sy, Sz);
+        ShaderConstants.TransformMatrix = ShaderConstants.TransformMatrix * M4Translate(gPadding.x, gPadding.y, 0.0f);
+        
+        ShaderConstants.Colour = v3_one;
+        ShaderConstants.Z = 0.0f;
+        assert(sizeof(shader_constants) % 16 == 0);
+        
+        assert(CreateConstantBuffer(&DirectXState, &ShaderConstants, sizeof(shader_constants), &ConstantBuffer));
+        UseConstantBuffer(&DirectXState, &ConstantBuffer);
+    }
+    
+    
+    
+    //
+    // DirectWrite
+    //
+    directwrite_state DirectWriteState;
+    {
+        InitDirectWrite(&DirectXState, &DirectWriteState);
+    }
+    
+    
+    
+    //
+    // Show and update window
+    ShowWindow(hWnd, nShowCmd);
+    UpdateWindow(hWnd);
+    
+    
+    
+    
+    
+    //
+    // The main loop
+    u32 const stride = sizeof(v2);
+    u32 const offset = 0;
+    
+    b32 ShouldRun = true;
+    MSG msg;
+    while (ShouldRun) 
+    {
         ID3D10Device *Device = DirectXState.Device;
         
-        //
-        // Allocate space
-        size_t Size = TotalVertexCount * sizeof(v2);
-        D3D10_BUFFER_DESC BufferDesc;
-        BufferDesc.ByteWidth = Size;                     // size of the buffer
-        BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-        BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
-        BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-        BufferDesc.MiscFlags = 0;                        // No other option
-        
-        HRESULT Result = Device->CreateBuffer(&BufferDesc, nullptr, &VertexBuffer);
-        if (FAILED(Result)) 
+        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
         {
-            // TODO(Marcus): Add better error handling
-            OutputDebugString(L"Failed to create the Vertexbuffer\n");
-            return 1;
-        }
-        
-        Size = TotalIndexCount * sizeof(u16);
-        BufferDesc.ByteWidth = Size;                     // size of the buffer
-        BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-        BufferDesc.BindFlags = D3D10_BIND_INDEX_BUFFER;  // use in vertex shader
-        BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-        BufferDesc.MiscFlags = 0;                        // No other option
-        
-        Result = Device->CreateBuffer(&BufferDesc, nullptr, &IndexBuffer);
-        if (FAILED(Result)) 
-        {
-            // TODO(Marcus): Add better error handling
-            OutputDebugString(L"Failed to create the Indexbuffer\n");
-            return 1;
-        }
-        
-        
-        //
-        // Upload data
-        for (u32 Index = 0; Index < MS.GetLevelCount(); ++Index)
-        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
             
-        }
-        
-#else
-        u32 BufferCount = MS.GetLevelCount();
-        
-        ID3D10Buffer **VertexBuffers;
-        VertexBuffers = (ID3D10Buffer **)malloc(BufferCount * sizeof(ID3D10Buffer *));
-        assert(VertexBuffers);
-        
-        ID3D10Buffer **IndexBuffers;
-        IndexBuffers = (ID3D10Buffer **)malloc(BufferCount * sizeof(ID3D10Buffer *));
-        assert(IndexBuffers);
-        
-        u32 *IndexCount;
-        IndexCount = (u32 *)malloc(BufferCount * sizeof(u32));
-        assert(IndexCount);
-        
-        {
-            ID3D10Device *Device = DirectXState.Device;
-            
-            for (u32 Index = 0; Index < BufferCount; ++Index)
+            if (msg.message == WM_QUIT) 
             {
-                MarchingSquares::level *Level = MS[Index];
-                assert(Level);
-                
-                //
-                // Vertexbuffer
-                size_t Size = Level->Vertices.size() * sizeof(v2);
-                D3D10_BUFFER_DESC BufferDesc;
-                BufferDesc.ByteWidth = Size;                     // size of the buffer
-                BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-                BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
-                BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-                BufferDesc.MiscFlags = 0;                        // No other option
-                
-                D3D10_SUBRESOURCE_DATA InitData;
-                InitData.pSysMem = Level->Vertices.data();
-                InitData.SysMemPitch = 0;
-                InitData.SysMemSlicePitch = 0;
-                
-                HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &VertexBuffers[Index]);
-                if (FAILED(Result)) 
-                {
-                    // TODO(Marcus): Add better error handling
-                    OutputDebugString(L"Failed to create the Vertexbuffer\n");
-                    return 1;
-                }
-                
-                
-                //
-                // Indexbuffer
-                IndexCount[Index] = Level->Indices.size();
-                
-                Size = Level->Indices.size() * sizeof(u16);
-                BufferDesc.ByteWidth = Size;                     // size of the buffer
-                BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-                BufferDesc.BindFlags = D3D10_BIND_INDEX_BUFFER;  // use in vertex shader
-                BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-                BufferDesc.MiscFlags = 0;                        // No other option
-                
-                InitData.pSysMem = Level->Indices.data();
-                InitData.SysMemPitch = 0;
-                InitData.SysMemSlicePitch = 0;
-                
-                Result = Device->CreateBuffer(&BufferDesc, &InitData, &IndexBuffers[Index]);
-                if (FAILED(Result)) 
-                {
-                    // TODO(Marcus): Add better error handling
-                    OutputDebugString(L"Failed to create the Indexbuffer\n");
-                    return 1;
-                }
+                ShouldRun = false;
             }
         }
-#endif
-        
         
         
         //
-        // Vertexbuffer, grid lines
-        ID3D10Buffer *VertexBufferGridLines;
-        u32 VertexCountGridLines = 0;
+        // Clear
+        Device->ClearDepthStencilView(DirectXState.DepthStencilView, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1, 0);
+        Device->ClearRenderTargetView(DirectXState.RenderTargetView, (float const *)&gBackgroundColour);
+        
+        
+        //
+        // Render grid
+        if (gGridRender)
         {
-            ID3D10Device *Device = DirectXState.Device;
+            ShaderConstants.Colour = V3(0.2f, 0.2f, 0.2f);
+            ShaderConstants.Z = 0.3f;
+            UpdateBuffer(&DirectXState, &ConstantBuffer, &ShaderConstants);
             
-            //
-            // Generate the data
-            u32 CellCountX = MS.GetCellCountX();
-            u32 CellCountY = MS.GetCellCountY();
-            v2 CellSize = MS.GetCellSize();
-            
-            VertexCountGridLines = 2 * (CellCountX + CellCountY);
-            size_t Size = VertexCountGridLines * sizeof(v2);
-            v2 *GridLinesVertices = (v2 *)malloc(Size);
-            assert(GridLinesVertices);
-            
-            u32 DataIndex = 0;
-            for (u32 y = 0; y < CellCountY; ++y)
-            {
-                GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(0, y));
-                GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(CellCountX - 1, y));
-            }
-            
-            for (u32 x = 0; x < CellCountX; ++x)
-            {
-                GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, 0));
-                GridLinesVertices[DataIndex++] = Hadamard(CellSize, V2(x, CellCountY - 1));
-            }
-            assert(DataIndex == VertexCountGridLines);
-            
-            
-            //
-            // Create the buffer
-            D3D10_BUFFER_DESC BufferDesc;
-            BufferDesc.ByteWidth = Size;                     // size of the buffer
-            BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-            BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
-            BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-            BufferDesc.MiscFlags = 0;                        // No other option
-            
-            D3D10_SUBRESOURCE_DATA InitData;
-            InitData.pSysMem = GridLinesVertices;
-            InitData.SysMemPitch = 0;
-            InitData.SysMemSlicePitch = 0;
-            
-            HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &VertexBufferGridLines);
-            if (FAILED(Result)) 
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the Vertex buffer for the grid lines\n");
-                return 1;
-            }
-            
-            free(GridLinesVertices);
-            GridLinesVertices = nullptr;
-        }
-        
-        
-        
-        //
-        // Shaders
-        ID3D10VertexShader *VertexShader;
-        ID3D10InputLayout *InputLayout;
-        //
-        // Vertex shader
-        {
-            ID3D10Device *Device = DirectXState.Device;
-            
-            // Open file
-            FILE *ShaderFile;
-            fopen_s(&ShaderFile, "shaders\\BasicVertexShader.cso", "rb");
-            assert(ShaderFile);
-            
-            // Get size
-            fseek(ShaderFile, 0L, SEEK_END);
-            size_t FileSize = ftell(ShaderFile);
-            rewind(ShaderFile);
-            
-            u8 *Bytes = (u8 *)malloc(FileSize);
-            assert(Bytes);
-            
-            // Read file
-            size_t BytesRead = fread_s(Bytes, FileSize, 1, FileSize, ShaderFile);
-            fclose(ShaderFile);
-            
-            // Create shader
-            HRESULT Result = Device->CreateVertexShader(Bytes,
-                                                        BytesRead,
-                                                        &VertexShader);
-            if (FAILED(Result)) {
-                if (Bytes)  free(Bytes);
-                OutputDebugString(L"Failed to create vertex shader from file!\n");
-                return 1;
-            }
-            Device->VSSetShader(VertexShader);
-            
-            
-            // Input layout
-            D3D10_INPUT_ELEMENT_DESC E = {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0};
-            Result = Device->CreateInputLayout(&E, 1, Bytes, BytesRead, &InputLayout);
-            
-            if (Bytes)  free(Bytes);
-            
-            if (FAILED(Result)) {
-                OutputDebugString(L"Failed to create element layout!\n");
-                return 1;
-            }
-            Device->IASetInputLayout(InputLayout);
+            RenderRenderable(&DirectXState, &GridLines[gRenderIndex]);
         }
         
         
         //
-        // Pixel shader
-        ID3D10PixelShader *PixelShader;
+        // Render levels
         {
-            ID3D10Device *Device = DirectXState.Device;
-            
-            // Open file
-            FILE *ShaderFile;
-            fopen_s(&ShaderFile, "shaders\\BasicPixelShader.cso", "rb");
-            assert(ShaderFile);
-            
-            // Get size
-            fseek(ShaderFile, 0L, SEEK_END);
-            size_t FileSize = ftell(ShaderFile);
-            rewind(ShaderFile);
-            
-            u8 *Bytes = (u8 *)malloc(FileSize);
-            assert(Bytes);
-            
-            // Read file
-            size_t BytesRead = fread_s(Bytes, FileSize, 1, FileSize, ShaderFile);
-            fclose(ShaderFile);
-            
-            // Create shader
-            HRESULT Result = Device->CreatePixelShader(Bytes,
-                                                       BytesRead,
-                                                       &PixelShader);
-            if (FAILED(Result)) {
-                if (Bytes)  free(Bytes);
-                OutputDebugString(L"Failed to create pixel shader from file!\n");
-                return 1;
-            }
-            Device->PSSetShader(PixelShader);
-        }
-        
-        
-        
-        //
-        // Constant buffer, used by the shaders
-        ID3D10Buffer *ConstantBuffer;
-        struct shader_constants
-        {
-            m4 TransformMatrix;
-            v3 Colour;
-            f32 Z;
-        };
-        
-        shader_constants ShaderConstants;
-        {
-            ID3D10Device *Device = DirectXState.Device;
-            
-            f32 Far = 1.0f;
-            f32 Sx  = 2.0f / (f32)Width;
-            f32 Sy  = 2.0f / (f32)Height;
-            f32 Sz  = 1.0f / Far;
-            
-            ShaderConstants.TransformMatrix = M4Translate(-1.0f, -1.0f, 0.0f) * M4Scale(Sx, Sy, Sz);
-            ShaderConstants.TransformMatrix = ShaderConstants.TransformMatrix * M4Translate(gPadding.x, gPadding.y, 0.0f);
-            
-            ShaderConstants.Colour = v3_one;
+            ShaderConstants.Colour = V3(1.0f, 1.0f, 1.0f);
             ShaderConstants.Z = 0.0f;
-            assert(sizeof(shader_constants) % 16 == 0);
+            UpdateBuffer(&DirectXState, &ConstantBuffer, &ShaderConstants);
             
-            D3D10_BUFFER_DESC BufferDesc;
-            BufferDesc.ByteWidth = sizeof(ShaderConstants);    
-            BufferDesc.Usage = D3D10_USAGE_DEFAULT;             
-            BufferDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;  // constant buffer
-            BufferDesc.CPUAccessFlags = 0; 
-            BufferDesc.MiscFlags = 0;                           
-            
-            D3D10_SUBRESOURCE_DATA InitData;
-            InitData.pSysMem = &ShaderConstants;
-            InitData.SysMemPitch = 0;
-            InitData.SysMemSlicePitch = 0;
-            
-            HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &ConstantBuffer);
-            if (FAILED(Result)) 
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the ConstantBuffer\n");
-                return 1;
-            }
-            
-            Device->VSSetConstantBuffers(0, 1, &ConstantBuffer);
-            Device->PSSetConstantBuffers(0, 1, &ConstantBuffer);
+            RenderRenderable(&DirectXState, &ContourLines[gRenderIndex]);
         }
         
         
-        
         //
-        // DirectWrite
-        IDWriteFactory *DWriteFactory;
-        ID2D1Device *D2DDevice;
-        ID2D1DeviceContext *D2DDeviceContext;
-        ID2D1Bitmap1 *D2DBitmap;
-        ID2D1SolidColorBrush *D2DBrush;
-        IDWriteTextFormat *D2DTextFormat;
+        // Render text
+        BeginDraw(&DirectWriteState);
+        WCHAR String[20];
+        swprintf(String, 20, L"RenderIndex = %d", gRenderIndex);
+        DrawText(&DirectWriteState, String, V2(100.0f, 0.0f));
+        
+        if (gLabelRender)
         {
-            HRESULT Result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, 
-                                                 __uuidof(IDWriteFactory), 
-                                                 (IUnknown **)&DWriteFactory);
-            if (FAILED(Result))
+            u32 CellX = CellCounts[2 * gRenderIndex];
+            u32 CellY = CellCounts[2 * gRenderIndex + 1];
+            v2 CellSize = CellSizes[gRenderIndex];
+            
+            u32 *Begin = Data[gRenderIndex];
+            
+            for (u32 y = 0; y < CellY; y += gLabelDistance)
             {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the DirectWrite factory!\n");
-                return 1;
-            }
-            
-            
-            //
-            // Direct2D
-            D2D1_FACTORY_OPTIONS Options;
-            Options.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
-            ID2D1Factory1 *D2DFactory;
-            Result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, // Will only be used in this thread
-                                       __uuidof(ID2D1Factory),
-                                       &Options,
-                                       (void **)&D2DFactory);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the Direct2D factory!\n");
-                return 1;
-            }
-            
-            // Get the 
-            IDXGIDevice *DXGIDevice;
-            Result = DirectXState.Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&DXGIDevice);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to get the DXGIDevice from the D3D10Device1!\n");
-                return 1;
-            }
-            
-            Result = D2DFactory->CreateDevice(DXGIDevice, &D2DDevice);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the D2DDevice!\n");
-                return 1;
-            }
-            
-            Result = D2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &D2DDeviceContext);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the D2DDeviceContext!\n");
-                return 1;
-            }
-            
-            IDXGISurface *D2DBuffer;
-            Result = DirectXState.SwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&D2DBuffer);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to get the backbuffer as IDXGISurface!\n");
-                return 1;
-            }
-            
-            D2D1_BITMAP_PROPERTIES1 Properties;
-            Properties.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            Properties.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-            Properties.dpiX = 0;
-            Properties.dpiX = 0;
-            Properties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
-            Properties.colorContext = nullptr;
-            
-            Result = D2DDeviceContext->CreateBitmapFromDxgiSurface(D2DBuffer, Properties, &D2DBitmap);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the D2DBitmap!\n");
-                return 1;
-            }
-            
-            D2DDeviceContext->SetTarget(D2DBitmap);
-            
-            Result = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White, 1.0f), &D2DBrush);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the D2DBrush!\n");
-                return 1;
-            }
-            
-            Result = DWriteFactory->CreateTextFormat(L"Microsoft New Tai Lue",
-                                                     nullptr,
-                                                     DWRITE_FONT_WEIGHT_NORMAL,
-                                                     DWRITE_FONT_STYLE_NORMAL,
-                                                     DWRITE_FONT_STRETCH_NORMAL,
-                                                     96.0f/5.0f,
-                                                     L"en-GB",
-                                                     &D2DTextFormat);
-            if (FAILED(Result))
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to create the D2DTextFormat!\n");
-                return 1;
-            }
-            
-            D2DTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-            D2DTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-            
-            
-            D2DBuffer->Release();
-            DXGIDevice->Release();
-            D2DFactory->Release();
-        }
-        
-        
-        
-        //
-        // Show and update window
-        ShowWindow(hWnd, nShowCmd);
-        UpdateWindow(hWnd);
-        
-        
-        
-        
-        
-        //
-        // The main loop
-        u32 const stride = sizeof(v2);
-        u32 const offset = 0;
-        
-#if 0
-        static v4 const Colours[] = 
-        {
-            {0.0f, 0.0f, 1.0f, 1.0f},
-            {0.0f, 1.0f, 0.0f, 1.0f},
-            {0.0f, 1.0f, 1.0f, 1.0f},
-            {1.0f, 0.0f, 0.0f, 1.0f},
-            {1.0f, 0.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 0.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            
-            {0.0f, 0.0f, 0.5f, 0.5f},
-            {0.0f, 0.5f, 0.0f, 0.5f},
-            {0.0f, 0.5f, 0.5f, 0.5f},
-            {0.5f, 0.0f, 0.0f, 0.5f},
-            {0.5f, 0.0f, 0.5f, 0.5f},
-            {0.5f, 0.5f, 0.0f, 0.5f},
-            {0.5f, 0.5f, 0.5f, 0.5f},
-        };
-#else
-        static v4 const Colours[] = 
-        {
-            {0.4f, 0.4f, 0.4f, 1.0f},
-            {0.5f, 0.5f, 0.5f, 1.0f},
-            {0.6f, 0.6f, 0.6f, 1.0f},
-            {0.7f, 0.7f, 0.7f, 1.0f},
-            {0.8f, 0.8f, 0.8f, 1.0f},
-            {0.9f, 0.9f, 0.9f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-        };
-#endif
-        static u32 const ColourCount = sizeof(Colours) / sizeof(*Colours);
-        
-        b32 ShouldRun = true;
-        MSG msg;
-        while (ShouldRun) 
-        {
-            ID3D10Device *Device = DirectXState.Device;
-            
-            while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
-            {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-                
-                if (msg.message == WM_QUIT) 
+                for (u32 x = 0; x < CellX; x += gLabelDistance)
                 {
-                    ShouldRun = false;
-                }
-            }
-            
-            
-            //
-            // Clear
-            Device->ClearDepthStencilView(DirectXState.DepthStencilView, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1, 0);
-            static v4 const BackgroundColour = V4(0.0f, 0.0f, 0.0f, 1.0f);
-            Device->ClearRenderTargetView(DirectXState.RenderTargetView, (float const *)&BackgroundColour);
-            
-            
-            //
-            // Render grid
-            if (gGridRender)
-            {
-                ShaderConstants.Colour = V3(0.2f, 0.2f, 0.2f);
-                ShaderConstants.Z = 0.3f;
-                // Refresh the data in the constant buffer
-                Device->UpdateSubresource(ConstantBuffer,   // Resource to update
-                                          0,                // Subresource index
-                                          nullptr,          // Destination box, nullptr for the entire buffer 
-                                          &ShaderConstants, // Pointer to the data             
-                                          0,                // Row pitch (only for textures?) 
-                                          0);               // Depth pitch (only for textures?)
-                Device->IASetVertexBuffers(0, 1, &VertexBufferGridLines, &stride, &offset);
-                Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
-                Device->Draw(VertexCountGridLines, 0);
-            }
-            
-            
-            //
-            // Render levels
-            for (u32 Index = 0; Index < BufferCount; ++Index)
-            {
-                // Change the colour
-                //u32 NewIndex = Index % ColourCount;
-                //ShaderConstants.Colour = Colours[NewIndex];
-                ShaderConstants.Colour = V3(1.0f, 1.0f, 1.0f);
-                ShaderConstants.Z = 0.0f;
-                
-                // Refresh the data in the constant buffer
-                Device->UpdateSubresource(ConstantBuffer,   // Resource to update
-                                          0,                // Subresource index
-                                          nullptr,          // Destination box, nullptr for the entire buffer 
-                                          &ShaderConstants, // Pointer to the data             
-                                          0,                // Row pitch (only for textures?) 
-                                          0);               // Depth pitch (only for textures?)
-                
-                Device->IASetVertexBuffers(0, 1, &VertexBuffers[Index], &stride, &offset);
-                Device->IASetIndexBuffer(IndexBuffers[Index], DXGI_FORMAT_R16_UINT, 0);
-                Device->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
-                Device->DrawIndexed(IndexCount[Index], 0, 0);
-            }
-            
-            //
-            // Render text
-            if (gLabelRender)
-            {
-                D2DDeviceContext->BeginDraw();
-                
-                u32 CellX = MS.GetCellCountX();
-                u32 CellY = MS.GetCellCountY();
-                v2 CellSize = MS.GetCellSize();
-                
-                std::vector<int>::const_iterator Begin = MS.DataBegin();
-                
-                for (u32 y = 0; y < CellY; y += gLabelDistance)
-                {
-                    for (u32 x = 0; x < CellX; x += gLabelDistance)
+                    if (gLabelCoordinates)
                     {
-                        WCHAR String[20];
-                        if (gLabelCoordinates)
-                        {
-                            swprintf(String, 20, L"(%d, %d) %d", x, y, *(Begin + ((y * CellX) + x)));
-                        }
-                        else
-                        {
-                            swprintf(String, 20, L"%d", *(Begin + ((y * CellX) + x)));
-                        }
-                        
-                        v2 P = gPadding + Hadamard(CellSize, V2(x, y));
-                        P.y = Height - P.y;
-                        
-                        v2 Offset = V2(60.0f, 20.0f);
-                        D2D1_RECT_F LayoutRect;
-                        LayoutRect.top    = P.y - Offset.y;
-                        LayoutRect.left   = P.x - Offset.x;
-                        LayoutRect.bottom = P.y + Offset.y;
-                        LayoutRect.right  = P.x + Offset.x;
-                        
-                        D2DDeviceContext->DrawText(String,
-                                                   wcslen(String),
-                                                   D2DTextFormat,
-                                                   &LayoutRect,
-                                                   D2DBrush,
-                                                   D2D1_DRAW_TEXT_OPTIONS_NONE,
-                                                   DWRITE_MEASURING_MODE_NATURAL);
+                        swprintf(String, 20, L"(%d, %d) %d", x, y, *(Begin + ((y * CellX) + x)));
                     }
-                }
-                
-                D2D1_TAG Tag1, Tag2;
-                HRESULT Result = D2DDeviceContext->EndDraw(&Tag1, &Tag2);
-                if (FAILED(Result))
-                {
-                    OutputDebugString(L"EndDraw() failed!\n");
+                    else
+                    {
+                        swprintf(String, 20, L"%d", *(Begin + ((y * CellX) + x)));
+                    }
+                    
+                    v2 P = gPadding + Hadamard(CellSize, V2(x, y));
+                    P.y = Height - P.y;
+                    DrawText(&DirectWriteState, String, P);
+                    
                 }
             }
-            
-            //
-            // Update
-            DirectXState.SwapChain->Present(0, 0);
+        }
+        
+        HRESULT Result = EndDraw(&DirectWriteState);
+        if (FAILED(Result))
+        {
+            OutputDebugString(L"EndDraw() failed!\n");
         }
         
         
         //
-        // @debug
-        IDXGIDebug *DebugInterface;
-        {
-            HMODULE hModule = GetModuleHandleA("Dxgidebug.dll");
-            if (!hModule) {
-                OutputDebugString(L"Failed to get module handle to Dxgidebug.dll\n");
-                return 1;
-            }
-            
-            typedef HRESULT (*GETDEBUGINTERFACE)(REFIID, void **);
-            GETDEBUGINTERFACE GetDebugInterface;
-            GetDebugInterface = (GETDEBUGINTERFACE)GetProcAddress(hModule, "DXGIGetDebugInterface");
-            
-            HRESULT Result = GetDebugInterface(__uuidof(IDXGIDebug), (void **)&DebugInterface);
-            if (FAILED(Result)) 
-            {
-                // TODO(Marcus): Add better error handling
-                OutputDebugString(L"Failed to get the debug interface!\n");
-                return 1;
-            }
-        }
-        
-        
-        
-        //
-        // Clean up
-        D2DTextFormat->Release();
-        D2DBrush->Release();
-        D2DBitmap->Release();
-        D2DDeviceContext->Release();
-        D2DDevice->Release();
-        DWriteFactory->Release();
-        ConstantBuffer->Release();
-        PixelShader->Release();
-        InputLayout->Release();
-        VertexShader->Release();
-        VertexBufferGridLines->Release();
-        
-        for (u32 Index = 0; Index < BufferCount; ++Index)
-        {
-            VertexBuffers[Index]->Release();
-            IndexBuffers[Index]->Release();
-        }
-        
-        free(VertexBuffers);
-        VertexBuffers = nullptr;
-        
-        free(IndexBuffers);
-        IndexBuffers = nullptr;
-        BufferCount = 0;
-        
-        free(IndexCount);
-        IndexCount = nullptr;
-        
-        DirectXState.RenderTargetView->Release();
-        DirectXState.DepthStencilState->Release();
-        DirectXState.DepthStencilView->Release();
-        DirectXState.DepthStencilBuffer->Release();
-        DirectXState.RenderTargetView->Release();
-        DirectXState.SwapChain->Release();
-        DirectXState.Device->Release();
-        
-        OutputDebugString(L"***** Begin ReportLiveObjects call *****\n");
-        DebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
-        OutputDebugString(L"***** End   ReportLiveObjects call *****\n\n");
-        
-        if (DebugInterface) {
-            DebugInterface->Release();
-        }
-        
-        FreeConsole();
-        
-        return msg.wParam;
+        // Update
+        DirectXState.SwapChain->Present(0, 0);
     }
+    
+    
+    
+    //
+    // @debug
+    IDXGIDebug *DebugInterface;
+    {
+        HMODULE hModule = GetModuleHandleA("Dxgidebug.dll");
+        if (!hModule) {
+            OutputDebugString(L"Failed to get module handle to Dxgidebug.dll\n");
+            return 1;
+        }
+        
+        typedef HRESULT (*GETDEBUGINTERFACE)(REFIID, void **);
+        GETDEBUGINTERFACE GetDebugInterface;
+        GetDebugInterface = (GETDEBUGINTERFACE)GetProcAddress(hModule, "DXGIGetDebugInterface");
+        
+        HRESULT Result = GetDebugInterface(__uuidof(IDXGIDebug), (void **)&DebugInterface);
+        if (FAILED(Result)) 
+        {
+            // TODO(Marcus): Add better error handling
+            OutputDebugString(L"Failed to get the debug interface!\n");
+            return 1;
+        }
+    }
+    
+    
+    
+    //
+    // Clean up
+    ReleaseDirectWrite(&DirectWriteState);
+    
+    ReleaseBuffer(&ConstantBuffer);
+    
+    ReleaseDirectXState(&DirectXState);
+    
+    OutputDebugString(L"***** Begin ReportLiveObjects call *****\n");
+    DebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+    OutputDebugString(L"***** End   ReportLiveObjects call *****\n\n");
+    
+    if (GridLines)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            ReleaseRenderable(&GridLines[Index]);
+        }
+        free(GridLines);
+        GridLines = nullptr;
+    }
+    
+    
+    if (ContourLines)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            ReleaseRenderable(&ContourLines[Index]);
+        }
+        free(ContourLines);
+        ContourLines = nullptr;
+    }
+    
+    if (DataSize)
+    {
+        free(DataSize);
+        DataSize = nullptr;
+    }
+    
+    if (Data)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            if (Data[Index])
+            {
+                free(Data[Index]);
+                Data[Index] = nullptr;
+            }
+        }
+        
+        free(Data);
+        gDataCount = 0;
+        Data = nullptr;
+    }
+    
+    if (CellSizes)
+    {
+        free(CellSizes);
+        CellSizes = nullptr;
+    }
+    
+    if (DebugInterface) {
+        DebugInterface->Release();
+    }
+    
+    FreeConsole();
+    
+    return msg.wParam;
+}

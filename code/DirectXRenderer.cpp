@@ -150,6 +150,24 @@ b32 CreateSwapChain(directx_state *State, directx_config *Config)
 
 
 
+void ReleaseDirectXState(directx_state *State)
+{
+    if (State)
+    {
+        State->RenderTargetView ? State->RenderTargetView->Release() : 0;
+        State->DepthStencilState->Release() ? State->DepthStencilState->Release() : 0;
+        State->DepthStencilView->Release() ? State->DepthStencilView->Release() : 0;
+        State->DepthStencilBuffer->Release() ? State->DepthStencilBuffer->Release() : 0;
+        State->RenderTargetView->Release() ? State->RenderTargetView->Release() : 0;
+        State->SwapChain->Release() ? State->SwapChain->Release() : 0;
+        State->Device->Release() ? State->Device->Release() : 0;
+        
+        ReleaseShader(&State->PixelShader);
+        ReleaseShader(&State->VertexShader);
+    }
+}
+
+
 b32 CreateDepthAndStencilbuffers(directx_state *State)
 {
     assert(State);
@@ -269,4 +287,604 @@ void SetViewport(directx_state *State, u32 x0, u32 y0, u32 w, u32 h, f32 MinDept
     Viewport->MaxDepth = MaxDepth;
     
     State->Device->RSSetViewports(1, &State->Viewport);
+}
+
+
+
+//
+// Buffers
+//
+b32 CreateBuffer(directx_state *State, 
+                 D3D10_BIND_FLAG BindFlag, 
+                 void *Data, size_t ElementSize, u32 ElementCount,
+                 directx_buffer *Buffer)
+{
+    assert(State);
+    assert(State->Device);
+    assert(ElementSize > 0 && ElementCount > 0);
+    assert(Buffer);
+    
+    Buffer->BindFlag = BindFlag;
+    Buffer->ElementSize = ElementSize;
+    Buffer->ElementCount = ElementCount;
+    
+    size_t Size = ElementCount * ElementSize;
+    if (Size % 16 != 0)
+    {
+        Size = 16 * (u32)ceilf((f32)Size / 16.0f);
+    }
+    
+    D3D10_BUFFER_DESC BufferDesc;
+    BufferDesc.ByteWidth = Size;             // size of the buffer
+    BufferDesc.Usage = D3D10_USAGE_DEFAULT;  // only usable by the GPU
+    BufferDesc.BindFlags = Buffer->BindFlag;
+    BufferDesc.CPUAccessFlags = 0;           // No CPU access to the buffer
+    BufferDesc.MiscFlags = 0;                // No other option
+    
+    D3D10_SUBRESOURCE_DATA InitData;
+    InitData.pSysMem = Data;
+    InitData.SysMemPitch = 0;
+    InitData.SysMemSlicePitch = 0;
+    
+    HRESULT Result = State->Device->CreateBuffer(&BufferDesc, Data ? &InitData : nullptr, &Buffer->Ptr);
+    if (FAILED(Result)) 
+    {
+        printf("Failed to create the buffer\n");
+        return false;
+    }
+    
+    
+    return true;
+}
+
+void UpdateBuffer(directx_state *State, directx_buffer *Buffer, void *Data, D3D10_BOX *Box)
+{
+    assert(State);
+    assert(State->Device);
+    assert(Buffer && Buffer->Ptr);
+    assert(Data);
+    
+    State->Device->UpdateSubresource(Buffer->Ptr, // Resource to update
+                                     0,           // Subresource index
+                                     Box,         // Destination box, nullptr for the entire buffer 
+                                     Data,        // Pointer to the data                
+                                     0,           // Row pitch (only for textures?) 
+                                     0);          // Depth pitch (only for textures?)
+}
+
+void ReleaseBuffer(directx_buffer *Buffer)
+{
+    if (Buffer)
+    {
+        Buffer->Ptr ? Buffer->Ptr->Release() : 0;
+        Buffer->ElementCount = 0;
+        Buffer->ElementSize = 0;
+    }
+}
+
+
+
+//
+// Constant buffer
+b32 CreateConstantBuffer(directx_state *State, void *Data, size_t DataSize, directx_buffer *Buffer)
+{
+    b32 Result = CreateBuffer(State, D3D10_BIND_CONSTANT_BUFFER, Data, DataSize, 1, Buffer);
+    assert(Result);
+    
+    return Result;
+}
+
+void UseConstantBuffer(directx_state *State, directx_buffer *Buffer, u32 SlotNumber)
+{
+    assert(State);
+    assert(State->Device);
+    assert(Buffer);
+    assert(Buffer->BindFlag == D3D10_BIND_CONSTANT_BUFFER);
+    
+    ID3D10Device *Device = State->Device;
+    Device->VSSetConstantBuffers(SlotNumber, 1, &Buffer->Ptr);
+    Device->PSSetConstantBuffers(SlotNumber, 1, &Buffer->Ptr);
+}
+
+
+
+//
+// Vertex and index buffers
+b32 CreateVertexBuffer(directx_state *State, void *Data, size_t VertexSize, u32 VertexCount, directx_buffer *Buffer)
+{
+    b32 Result = CreateBuffer(State, D3D10_BIND_VERTEX_BUFFER, Data, VertexSize, VertexCount, Buffer);
+    assert(Result);
+    
+    return Result;
+}
+
+b32 CreateIndexBuffer(directx_state *State, void *Data, size_t IndexSize, u32 IndexCount, directx_buffer *Buffer)
+{
+    b32 Result = CreateBuffer(State, D3D10_BIND_INDEX_BUFFER, Data, IndexSize, IndexCount, Buffer);
+    assert(Result);
+    
+    return Result;
+}
+
+
+
+//
+// Renderables
+// 
+
+//
+// Indexed
+b32 CreateRenderable(directx_state *State,
+                     directx_renderable_indexed *Renderable,
+                     void *VertexData, size_t VertexSize, u32 VertexCount,
+                     void *IndexData, size_t IndexSize, u32 IndexCount,
+                     D3D10_PRIMITIVE_TOPOLOGY Topology)
+{
+    //
+    // Vertexbuffer
+    b32 Result = CreateVertexBuffer(State, VertexData, VertexSize, VertexCount, &Renderable->VertexBuffer);
+    assert(Result);
+    
+    Result = CreateIndexBuffer(State, IndexData, IndexSize, IndexCount, &Renderable->IndexBuffer);
+    assert(Result);
+    
+    
+#if 0
+    size_t Size = VertexCount * sizeof(v2);
+    D3D10_BUFFER_DESC BufferDesc;
+    BufferDesc.ByteWidth = Size;                     // size of the buffer
+    BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
+    BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
+    BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
+    BufferDesc.MiscFlags = 0;                        // No other option
+    
+    D3D10_SUBRESOURCE_DATA InitData;
+    InitData.pSysMem = VertexData;
+    InitData.SysMemPitch = 0;
+    InitData.SysMemSlicePitch = 0;
+    
+    HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &Renderable->VertexBuffer);
+    if (FAILED(Result)) 
+    {
+        printf("Failed to create the Vertexbuffer\n");
+        return false;
+    }
+    
+    
+    //
+    // Indexbuffer
+    Renderable->IndexCount = IndexCount;
+    
+    Size = IndexCount * sizeof(u16);
+    BufferDesc.ByteWidth = Size;                     // size of the buffer
+    BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
+    BufferDesc.BindFlags = D3D10_BIND_INDEX_BUFFER;  // use in vertex shader
+    BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
+    BufferDesc.MiscFlags = 0;                        // No other option
+    
+    InitData.pSysMem = IndexData;
+    InitData.SysMemPitch = 0;
+    InitData.SysMemSlicePitch = 0;
+    
+    Result = Device->CreateBuffer(&BufferDesc, &InitData, &Renderable->IndexBuffer);
+    if (FAILED(Result)) 
+    {
+        printf("Failed to create the Indexbuffer\n");
+        return false;
+    }
+#endif
+    
+    Renderable->Topology = Topology;
+    
+    return true;
+}
+
+
+void RenderRenderable(directx_state *State, directx_renderable_indexed *Renderable,
+                      u32 const Stride, u32 const Offset)
+{
+    assert(State);
+    assert(State->Device);
+    assert(Renderable);
+    assert(Renderable->VertexBuffer.Ptr);
+    assert(Renderable->IndexBuffer.Ptr && Renderable->IndexBuffer.ElementCount > 0);
+    
+    ID3D10Device *Device = State->Device;
+    Device->IASetVertexBuffers(0, 1, &Renderable->VertexBuffer.Ptr, &Stride, &Offset);
+    Device->IASetIndexBuffer(Renderable->IndexBuffer.Ptr, DXGI_FORMAT_R16_UINT, 0);
+    Device->IASetPrimitiveTopology(Renderable->Topology);
+    Device->DrawIndexed(Renderable->IndexBuffer.ElementCount, 0, 0);
+}
+
+
+
+void ReleaseRenderable(directx_renderable_indexed *Renderable)
+{
+    if (Renderable)
+    {
+        ReleaseBuffer(&Renderable->VertexBuffer);
+        ReleaseBuffer(&Renderable->IndexBuffer);
+    }
+}
+
+
+//
+// Non-indexed
+b32 CreateRenderable(directx_state *State,
+                     directx_renderable *Renderable,
+                     void *VertexData, size_t VertexSize, u32 VertexCount,
+                     D3D10_PRIMITIVE_TOPOLOGY Topology)
+{
+    assert(State);
+    assert(State->Device);
+    assert(Renderable);
+    assert(VertexData && VertexCount > 0);
+    
+    ID3D10Device *Device = State->Device;
+    
+    //
+    // Vertexbuffer
+    Renderable->VertexBuffer.ElementCount = VertexCount;
+    Renderable->VertexBuffer.ElementSize = VertexSize;
+    
+    size_t Size = VertexCount * VertexSize;
+    D3D10_BUFFER_DESC BufferDesc;
+    BufferDesc.ByteWidth = Size;                     // size of the buffer
+    BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
+    BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
+    BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
+    BufferDesc.MiscFlags = 0;                        // No other option
+    
+    D3D10_SUBRESOURCE_DATA InitData;
+    InitData.pSysMem = VertexData;
+    InitData.SysMemPitch = 0;
+    InitData.SysMemSlicePitch = 0;
+    
+    HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &Renderable->VertexBuffer.Ptr);
+    if (FAILED(Result)) 
+    {
+        printf("Failed to create the Vertexbuffer\n");
+        return false;
+    }
+    
+    Renderable->Topology = Topology;
+    
+    return true;
+}
+
+
+
+void RenderRenderable(directx_state *State, directx_renderable *Renderable,
+                      u32 const Stride, u32 const Offset)
+{
+    assert(State);
+    assert(State->Device);
+    assert(Renderable);
+    assert(Renderable->VertexBuffer.Ptr);
+    assert(Renderable->VertexBuffer.ElementCount > 0);
+    
+    ID3D10Device *Device = State->Device;
+    Device->IASetVertexBuffers(0, 1, &Renderable->VertexBuffer.Ptr, &Stride, &Offset);
+    Device->IASetPrimitiveTopology(Renderable->Topology);
+    Device->Draw(Renderable->VertexBuffer.ElementCount, 0);
+}
+
+
+
+void ReleaseRenderable(directx_renderable *Renderable)
+{
+    if (Renderable)
+    {
+        ReleaseBuffer(&Renderable->VertexBuffer);
+    }
+}
+
+
+
+//
+// Shaders
+//
+
+
+//
+// Vertex shader
+// TODO(Marcus): Pull out the input layout as well, currently this only allows one layout...
+b32 CreateShader(directx_state *State, const char *PathAndName, vertex_shader *Shader)
+{
+    assert(State);
+    assert(State->Device);
+    assert(PathAndName);
+    assert(Shader);
+    
+    ID3D10Device *Device = State->Device;
+    
+    // Open file
+    FILE *ShaderFile;
+    fopen_s(&ShaderFile, PathAndName, "rb");
+    assert(ShaderFile);
+    
+    // Get size
+    fseek(ShaderFile, 0L, SEEK_END);
+    size_t FileSize = ftell(ShaderFile);
+    rewind(ShaderFile);
+    
+    u8 *Bytes = (u8 *)malloc(FileSize);
+    assert(Bytes);
+    
+    // Read file
+    size_t BytesRead = fread_s(Bytes, FileSize, 1, FileSize, ShaderFile);
+    fclose(ShaderFile);
+    
+    // Create shader
+    HRESULT Result = Device->CreateVertexShader(Bytes,
+                                                BytesRead,
+                                                &Shader->Program);
+    if (FAILED(Result)) {
+        if (Bytes)  free(Bytes);
+        printf("Failed to create vertex shader from file!\n");
+        return false;
+    }
+    
+    
+    // Input layout
+    D3D10_INPUT_ELEMENT_DESC E = {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0};
+    Result = Device->CreateInputLayout(&E, 1, Bytes, BytesRead, &Shader->InputLayout);
+    
+    if (Bytes)  free(Bytes);
+    
+    if (FAILED(Result)) {
+        printf("Failed to create element layout!\n");
+        return false;
+    }
+    
+    return true;
+}
+
+void ReleaseShader(vertex_shader *Shader)
+{
+    if (Shader)
+    {
+        Shader->Program ? Shader->Program->Release() : 0;
+        Shader->InputLayout ? Shader->InputLayout->Release() : 0;
+    }
+}
+
+void UseShader(directx_state *State, vertex_shader *Shader)
+{
+    assert(State && State->Device);
+    assert(Shader);
+    assert(Shader->Program);
+    assert(Shader->InputLayout);
+    
+    State->Device->VSSetShader(Shader->Program);
+    State->Device->IASetInputLayout(Shader->InputLayout);
+}
+
+
+b32 CreateShader(directx_state *State, const char *PathAndName, pixel_shader *Shader)
+{
+    assert(State);
+    assert(State->Device);
+    assert(PathAndName);
+    assert(Shader);
+    
+    ID3D10Device *Device = State->Device;
+    
+    // Open file
+    FILE *ShaderFile;
+    fopen_s(&ShaderFile, PathAndName, "rb");
+    assert(ShaderFile);
+    
+    // Get size
+    fseek(ShaderFile, 0L, SEEK_END);
+    size_t FileSize = ftell(ShaderFile);
+    rewind(ShaderFile);
+    
+    u8 *Bytes = (u8 *)malloc(FileSize);
+    assert(Bytes);
+    
+    // Read file
+    size_t BytesRead = fread_s(Bytes, FileSize, 1, FileSize, ShaderFile);
+    fclose(ShaderFile);
+    
+    // Create shader
+    HRESULT Result = Device->CreatePixelShader(Bytes,
+                                               BytesRead,
+                                               &Shader->Program);
+    
+    if (Bytes)  free(Bytes);
+    
+    if (FAILED(Result)) {
+        printf("Failed to create pixel shader from file!\n");
+        return false;
+    }
+    
+    return true;
+}
+
+void ReleaseShader(pixel_shader *Shader)
+{
+    
+    if (Shader)
+    {
+        Shader->Program ? Shader->Program->Release() : 0;
+    }
+}
+
+void UseShader(directx_state *State, pixel_shader *Shader)
+{
+    assert(State && State->Device);
+    assert(Shader);
+    assert(Shader->Program);
+    
+    State->Device->PSSetShader(Shader->Program);
+}
+
+
+//
+// DirectWrite
+//
+b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
+{
+    assert(DirectXState);
+    assert(DirectXState->Device);
+    assert(DirectXState->SwapChain);
+    assert(State);
+    
+    IDWriteFactory *DWriteFactory;
+    HRESULT Result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
+                                         __uuidof(IDWriteFactory), 
+                                         (IUnknown **)&DWriteFactory);
+    if (FAILED(Result))
+    {
+        // TODO(Marcus): Add better error handling
+        printf("Failed to create the DirectWrite factory!\n");
+        return false;
+    }
+    
+    
+    //
+    // Direct2D
+    D2D1_FACTORY_OPTIONS Options;
+    Options.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
+    ID2D1Factory1 *D2DFactory;
+    Result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, // Will only be used in this thread
+                               __uuidof(ID2D1Factory),
+                               &Options,
+                               (void **)&D2DFactory);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the Direct2D factory!\n");
+        return false;
+    }
+    
+    IDXGIDevice *DXGIDevice;
+    Result = DirectXState->Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&DXGIDevice);
+    if (FAILED(Result))
+    {
+        printf("Failed to get the DXGIDevice from the D3D10Device1!\n");
+        return false;
+    }
+    
+    Result = D2DFactory->CreateDevice(DXGIDevice, &State->Device);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the D2DDevice!\n");
+        return false;
+    }
+    
+    ID2D1Device *Device = State->Device;
+    Result = Device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &State->DeviceContext);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the D2DDeviceContext!\n");
+        return false;
+    }
+    
+    IDXGISurface *D2DBuffer;
+    Result = DirectXState->SwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&D2DBuffer);
+    if (FAILED(Result))
+    {
+        printf("Failed to get the backbuffer as IDXGISurface!\n");
+        return false;
+    }
+    
+    D2D1_BITMAP_PROPERTIES1 Properties;
+    Properties.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    Properties.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
+    Properties.dpiX = 0;
+    Properties.dpiX = 0;
+    Properties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
+    Properties.colorContext = nullptr;
+    
+    ID2D1DeviceContext *DeviceContext = State->DeviceContext;
+    Result = DeviceContext->CreateBitmapFromDxgiSurface(D2DBuffer, Properties, &State->RenderTarget);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the D2DBitmap!\n");
+        return false;
+    }
+    DeviceContext->SetTarget(State->RenderTarget);
+    
+    Result = DeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White, 1.0f), &State->Brush);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the D2DBrush!\n");
+        return false;
+    }
+    
+    Result = DWriteFactory->CreateTextFormat(L"Microsoft New Tai Lue",
+                                             nullptr,
+                                             DWRITE_FONT_WEIGHT_NORMAL,
+                                             DWRITE_FONT_STYLE_NORMAL,
+                                             DWRITE_FONT_STRETCH_NORMAL,
+                                             96.0f/5.0f,
+                                             L"en-GB",
+                                             &State->TextFormat);
+    if (FAILED(Result))
+    {
+        printf("Failed to create the D2DTextFormat!\n");
+        return false;
+    }
+    
+    State->TextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    State->TextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    
+    D2DBuffer->Release();
+    DXGIDevice->Release();
+    D2DFactory->Release();
+    DWriteFactory->Release();
+    
+    return true;
+}
+
+
+
+void ReleaseDirectWrite(directwrite_state *State)
+{
+    assert(State);
+    State->TextFormat->Release();
+    State->Brush->Release();
+    State->RenderTarget->Release();
+    State->DeviceContext->Release();
+    State->Device->Release();
+}
+
+
+
+void BeginDraw(directwrite_state *State)
+{
+    assert(State && State->DeviceContext);
+    State->DeviceContext->BeginDraw();
+}
+
+
+HRESULT EndDraw(directwrite_state *State)
+{
+    assert(State && State->DeviceContext);
+    HRESULT Result = State->DeviceContext->EndDraw();
+    
+    return Result;
+}
+
+
+void DrawTextW(directwrite_state *State, WCHAR const *String, v2 P)
+{
+    assert(State && State->DeviceContext);
+    assert(String);
+    
+    v2 Offset = V2(60.0f, 20.0f);
+    D2D1_RECT_F LayoutRect;
+    LayoutRect.top    = P.y - Offset.y;
+    LayoutRect.left   = P.x - Offset.x;
+    LayoutRect.bottom = P.y + Offset.y;
+    LayoutRect.right  = P.x + Offset.x;
+    
+    State->DeviceContext->DrawText(String,
+                                   wcslen(String),
+                                   State->TextFormat,
+                                   &LayoutRect,
+                                   State->Brush,
+                                   D2D1_DRAW_TEXT_OPTIONS_NONE,
+                                   DWRITE_MEASURING_MODE_NATURAL);
 }

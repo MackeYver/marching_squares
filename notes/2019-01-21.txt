@@ -1,0 +1,28 @@
+(This day we'll continue on the goals set yesterday).
+
+Goal of the day:
+1. Pull out the DirectX code into its own thing
+2. Implement some way of measuring performance (RTSCD)
+
+
+
+##1. Pull out the DirectX code into its own thing
+-----------------------------------------------
+Done! Not most of the DirectX code is pulled out into its own thing, we could probably take it
+even further (next step would probably be to use a platform agnostic frontend and a platform
+specific backend), but this we'll do for now.
+
+Also changed the program so that it runs the algorithm on all the data, for now we have only
+five sets of data. The use can change which of the results that gets rendered to the screen by
+pressing the I key.
+
+
+
+##SideQuest - Ref count underflow in the swap chain
+-------------------------------------------------
+See the note from yesterday to see the full description of this bug.
+
+
+
+##2. Implement some way of measuring performance (RTSCD)
+------------------------------------------------------

@@ -2,9 +2,31 @@
 //  An implementation of the algorithm Marching squares,
 //  using OOP and the c standard library
 //
-//  Created by Marcus Larsson on 2018-11-21.
-//  Copyright © 2018 Marcus Larsson. All rights reserved.
+// 
+// MIT License
+// 
+// Copyright (c) 2018 Marcus Larsson
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 //
+
+
 
 #ifndef Marching_squares_h
 #define Marching_squares_h
@@ -19,6 +41,7 @@
 // Base class
 class MarchingSquares {
     public:
+    
     //
     // Types
     struct line_segment {
@@ -30,14 +53,6 @@ class MarchingSquares {
     {
         v2 P;
         u32 LineIndex;
-    };
-    
-    struct level {
-        std::vector<v2> Vertices;
-        std::vector<u16> Indices; // 0xFFFF is used as primitive restart index
-        
-        f32 Height;
-        u32 LineCount;
     };
     
     struct config {
@@ -58,23 +73,10 @@ class MarchingSquares {
         NoLineSegments,
     };
     
-    typedef std::vector<level>::size_type level_count;
-    
-    
-    
-    //
-    // Operator overloading, returns the level at the given index
-    level      * operator [] (u32 Index);
-    level const* operator [] (u32 Index) const;
-    
-    
     
     //
     // Constructors
-    MarchingSquares() : CellCountX(0), CellCountY(0), CellSize({}) {}
-    MarchingSquares(u32 const *Heights, size_t HeightCount, config const Config = {});
-    MarchingSquares(std::vector<int> const &Heights, config const Config = {}); // copy constructor
-    
+    MarchingSquares() : CellCountX(0), CellCountY(0), CellSize({}), DataPtr(nullptr) {}
     
     
     //
@@ -83,20 +85,26 @@ class MarchingSquares {
     // free the allocated memory in their destructors.
     
     
-    
     //
     // Setters and getters
-    u32 GetCellCountX() const        {return CellCountX;}
-    u32 GetCellCountY() const        {return CellCountY;}
-    v2  GetCellSize()   const        {return CellSize;}
+    void SetDataPtr(std::vector<u32> *Heights, config const *Config);
+    void SetDataPtr(u32 *Heights, config const *Config);
     
-    level_count GetLevelCount() const {return Levels.size();}
-    level *GetLevel(u32 Index);
+    void CopyData(std::vector<u32> *Heights, config const *Config);
+    void CopyData(u32 *Heights, u32 HeightsCount, config const *Config);
     
-    std::vector<int>::const_iterator DataBegin() {return Data.begin();}
-    std::vector<int>::const_iterator DataEnd()   {return Data.end();}
-    std::vector<int>::size_type      DataSize()  {return Data.size();}
     
+    u32 GetCellCountX() const                    {return CellCountX;}
+    u32 GetCellCountY() const                    {return CellCountY;}
+    v2  GetCellSize()   const                    {return CellSize;}
+    
+    std::vector<v2>  *GetVertexData()            {return &Vertices;}
+    std::vector<u16> *GetIndexData()             {return &Indices;}
+    
+    std::vector<v2>::size_type GetVertexCount()  {return Vertices.size();}
+    std::vector<v2>::size_type GetIndexCount()   {return Indices.size();}
+    
+    u32 *DataBegin()                             {return DataPtr;}
     
     
     //
@@ -107,8 +115,14 @@ class MarchingSquares {
     //
     // Data
     protected:
-    std::vector<level> Levels;
-    std::vector<int> Data;
+    void SetConfig(config const *Config);
+    
+    std::vector<v2> Vertices;
+    std::vector<u16> Indices; // 0xFFFF is used as primitive restart index
+    
+    std::vector<u32> Data;
+    u32 *DataPtr;
+    
     v2 CellSize;
     u32 CellCountX = 0;
     u32 CellCountY = 0;

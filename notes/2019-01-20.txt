@@ -1,0 +1,40 @@
+(This note is replacing 2019-01-18, due to not working any longer time that day).
+
+Goal of the day:
+1. Pull out the DirectX code into its own thing
+2. Implement some way of measuring performance (RTSCD)
+
+
+
+##1. Pull out the DirectX code into its own thing
+-----------------------------------------------
+We want to start profiling and measuring performance of the implementation and it seems like a 
+good idea to structure it so that it's easy to run the implementaiton several times in a row 
+but with different inputs. Pulling out the DirectX code is a good start.
+
+Pulling out the DirectX code and abstracting a bit haven't really been all to exciting, nothing 
+new to report yet. It's not particullary interesting but it is sure satisfying!
+
+Changed the std_oop class to only produce one soup of lines in a vector, not divided per level
+as previously. The most likely use case would be to just render the result and not to do any
+more processing of the result, and in that case we want to batch the primitives any ways.
+Also, if it turns out that we at some point needs to do any processing on the primitives, then
+it probably doesn't matter that we don't have them on a level basis. If we really need to 
+access the data per level, then we will simply change the class to produce per level again; 
+this could easily be acheived by simply storing a level count and indices into the vertex
+indices for each level.
+  
+
+
+##SideQuest - Ref count underflow in the swap chain
+-------------------------------------------------
+But there seems to be a problem with the way we're releasing the DirectX objects, if we close 
+the program by clicking the x in the upper right corner of the window, it seems like the 
+SwapChain is relased automatically? Whenever the program is closed this way, DirectX reports a 
+Ref count underflow in the SwapChain. If the program is closed by pressing the stop button in 
+Visual Studio, there is no underflow of the ref count.
+
+
+
+##2. Implement some way of measuring performance (RTSCD)
+------------------------------------------------------

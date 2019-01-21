@@ -1,7 +1,27 @@
+// 
+// MIT License
+// 
+// Copyright (c) 2018 Marcus Larsson
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 //
-//  Created by Marcus Larsson on 2018-11-21.
-//  Copyright © 2018 Marcus Larsson. All rights reserved.
-//
+
 
 #include "oop_std.h"
 
@@ -48,78 +68,54 @@ inline MarchingSquares::line_segment LineSegment(v2 const& A, v2 const& B) {
 
 
 //
-// Operator overloading
-
-/** @desc Returns the level with given index (0-based). Returns nullptr if index is out of bounds. */
-MarchingSquares::level *MarchingSquares::operator [] (u32 Index) {
-    if (Index >= Levels.size())  return nullptr;
-    return &Levels[Index];
-}
-
-/** @desc Returns the level with given index (0-based). Returns nullptr if index is out of bounds. */
-MarchingSquares::level const *MarchingSquares::operator [] (u32 Index) const {
-    if (Index >= Levels.size())  return nullptr;
-    return &Levels[Index];
-}
-
-
-
+// Setters
 //
-// Constructors
-
-/** @desc Will construct a new instance of MarchingSquares, the vector will be copied. */
-MarchingSquares::MarchingSquares(std::vector<int> const &Heights, config C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
+void MarchingSquares::SetConfig(config const *Config)
 {
-    if (C.SourceHasOriginUpperLeft)
-    {
-        Data.reserve(CellCountX * CellCountY);
-        for (u32 row = 0; row < CellCountY; ++row)
-        {
-            copy(Heights.begin() + (row * CellCountX), 
-                 Heights.begin() + (row * CellCountX) + CellCountX, 
-                 Data.begin()    + ((CellCountY - 1 - row) * CellCountX));
-        }
-    }
-    else
-    {
-        copy(Heights.begin(), Heights.end(), back_inserter(Data));
-    }
+    CellCountX = Config->CellCountX;
+    CellCountY = Config->CellCountY;
+    CellSize = Config->CellSize;
 }
 
-MarchingSquares::MarchingSquares(u32 const *Heights, size_t HeightCount, config const C) :
-CellSize(C.CellSize), CellCountX(C.CellCountX), CellCountY(C.CellCountY)
+void MarchingSquares::SetDataPtr(std::vector<u32> *Heights, config const *Config)
 {
-    if (C.SourceHasOriginUpperLeft)
-    {
-        for (s32 SourceRow = CellCountY - 1; SourceRow >= 0; --SourceRow)
-        {
-            copy(Heights + (SourceRow * CellCountX), 
-                 Heights + (SourceRow * CellCountX) + CellCountX, 
-                 back_inserter(Data));
-        }
-    }
-    else
-    {
-        copy(Heights, Heights + HeightCount, back_inserter(Data));
-    }
+    assert(Heights);
+    Data.clear();
+    DataPtr = Heights->data();
+    SetConfig(Config);
 }
 
+void MarchingSquares::SetDataPtr(u32 *Heights, config const *Config)
+{
+    assert(Heights);
+    Data.clear();
+    DataPtr = Heights;
+    SetConfig(Config);
+}
 
+void MarchingSquares::CopyData(std::vector<u32> *Heights, config const *Config)
+{
+    assert(Heights);
+    Data.clear();
+    copy(Heights->begin(), Heights->end(), back_inserter(Data));
+    DataPtr = Data.data();
+    SetConfig(Config);
+}
 
-//
-// Setters and getters
-
-/** @desc Get the level with the given index (0-based). Returns nullptr if index is out of bounds. */
-MarchingSquares::level *MarchingSquares::GetLevel(u32 Index) {
-    if (Index >= Levels.size())  return nullptr;
-    return &Levels[Index];
+void MarchingSquares::CopyData(u32 *Heights, u32 HeightsCount, config const *Config)
+{
+    assert(Heights);
+    Data.clear();
+    copy(Heights, Heights + HeightsCount, back_inserter(Data));
+    DataPtr = Data.data();
+    SetConfig(Config);
 }
 
 
 
 //
 // The algorithm(TM)
+//
 
 /** @desc Utility function, used by "march_squares()" in order to add Line_segments. */
 inline void Add(vector<MarchingSquares::line_segment>& LineSegments, 
@@ -243,27 +239,25 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
 /** @desc Executes the algorithm. Requires that data_ptr != nullptr, width >= 2, height >= 2.
 The resultant line segments will be in a "unit square", i.e. x : [0, 1], y : [0, 1] */
 MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &LevelHeights) {
-    if (Data.size() <= 0)          return NoData;
-    if (CellCountX < 2)            return InvalidCellCountX;
-    if (CellCountY < 2)            return InvalidCellCountY;
-    if (CellSize.x <= 0.0f)        return InvalidCellSize;
-    if (CellSize.y <= 0.0f)        return InvalidCellSize;
-    if (LevelHeights.size() == 0)  return InvalidLevelHeight;
+    if (!DataPtr)                 return NoData;
+    if (CellCountX < 2)           return InvalidCellCountX;
+    if (CellCountY < 2)           return InvalidCellCountY;
+    if (CellSize.x <= 0.0f)       return InvalidCellSize;
+    if (CellSize.y <= 0.0f)       return InvalidCellSize;
+    if (LevelHeights.size() == 0) return InvalidLevelHeight;
     
-    Levels.clear();
+    Vertices.clear();
+    Indices.clear();
     
     std::vector<line_segment> LineSegments;
     std::map<u32, std::vector<line_point> > LinePoints;
     
     for (auto& CurrHeight : LevelHeights) {
-        level CurrLevel;
-        CurrLevel.Height = CurrHeight;
-        
         LineSegments.clear();
         LinePoints.clear();
         
-        vector<int>::const_iterator Begin = Data.begin();
-        vector<int>::const_iterator It;
+        u32 *Begin  = DataPtr;
+        u32 *It;
         
         
         //
@@ -356,23 +350,31 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                         continue;
                     }
                     
-                    CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
-                    CurrLevel.Vertices.push_back(P0);
+                    //CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
+                    //CurrLevel.Vertices.push_back(P0);
+                    
+                    Indices.push_back((u16)Vertices.size());
+                    Vertices.push_back(P0);
                     
                     if (LineIndex == CurrChain.size() - 1)
                     {
-                        CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
-                        CurrLevel.Vertices.push_back(P1);
+                        //CurrLevel.Indices.push_back((u16)CurrLevel.Vertices.size());
+                        //CurrLevel.Vertices.push_back(P1);
                         
-                        CurrLevel.Indices.push_back((u16)0xFFFF);
+                        Indices.push_back((u16)Vertices.size());
+                        Vertices.push_back(P1);
+                        
+                        //CurrLevel.Indices.push_back((u16)0xFFFF);
+                        
+                        Indices.push_back((u16)0xFFFF);
                     }
                     
-                    ++CurrLevel.LineCount;
+                    //++CurrLevel.LineCount;
                 }
             }
             
-            CurrLevel.LineCount = LineSegments.size();
-            Levels.push_back(CurrLevel);
+            //CurrLevel.LineCount = LineSegments.size();
+            //Levels.push_back(CurrLevel);
         }
     }
     
