@@ -20,9 +20,61 @@ pressing the I key.
 
 ##SideQuest - Ref count underflow in the swap chain
 -------------------------------------------------
-See the note from yesterday to see the full description of this bug.
+See the note from yesterday to see the full description of this bug. We will actually put this
+on hold for now, we'll take a look at it later.
 
 
 
 ##2. Implement some way of measuring performance (RTSCD)
 ------------------------------------------------------
+Let's start with using the QueryPerfomanceCounter, this way we'll be able to get timing with a
+precision of less than a microsecond. Which is good!
+
+The first run with timers shows that most of the time is spent in the "marching squares" part, 
+that is, not in the two simplifying post-processes steps.
+
+One example from the program (compiled as debug):
+
+Total            21886 (100.0%)
+  MarchSquares     18292 (83.6%)
+    BinarySum         2850 (15.6%)
+    Lerp              6934 (37.9%)
+    Switch            4613 (25.2%)
+  Simplify          3266 (14.9%)
+    GetLineChain      2496 (76.4%)
+    MergeLines         623 (19.1%)
+
+
+In the table above, the entry "MarchSquares" is the algorithm proper (i.e. without the post-
+processing). 
+- "BinarySum" is the part of where we look up the values at the four points of the quadrant
+  that we're looking at. Also where we calculate the sum in order to determine which scenario
+  we're currently at.
+- "Lerp" is where we calculate the linear interpolation between the points.
+- "Switch" is simply the switch statement that evaulates which scenario we'll use (based on
+  the sum calculated in "BinarySum").
+
+The "Simplify" part is the post-processing so to speak, this is the part in which we reduce
+the data size by creating polylines rather than a line list, and where we merge vertices.
+- "GetLineChain" creates the polylines
+- "MergeLines" mergers the vertices/lines
+
+It is the linear interpolation that takes the most time currently. We're currently
+calculating the interpolation for all four edges, even when we only use two of them. This
+could easily made faster, but before we do that -- let's try that same case compiled in 
+release mode as well (O2):
+
+Total             9650 (100.0%)
+  MarchSquares      8925 (92.5%)
+    BinarySum         1724 (19.3%)
+    Lerp              1493 (16.7%)
+    Switch            1936 (21.7%)
+  Simplify           621 ( 6.4%)
+    GetLineChain       513 (82.6%)
+    MergeLines          52 ( 8.4%)
+
+
+A lot faster, ant it looks like the time taken spread more between the different parts, or
+rather it looks like the lerp step got a lot faster in relation to the other steps. Did
+perhaps the compiler help us with removing/not performing the un-used interpolation 
+calculations?

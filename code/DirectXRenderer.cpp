@@ -34,7 +34,7 @@
 #ifdef DEBUG
 #include <assert.h>
 #else
-#define assert()
+#define assert(x)
 #endif
 
 #include <stdio.h>

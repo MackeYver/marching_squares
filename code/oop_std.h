@@ -35,6 +35,8 @@
 #include <map>
 #include "Mathematics.h"
 
+class oop_timer;
+
 
 
 //
@@ -75,8 +77,8 @@ class MarchingSquares {
     
     
     //
-    // Constructors
-    MarchingSquares() : CellCountX(0), CellCountY(0), CellSize({}), DataPtr(nullptr) {}
+    // Constructor
+    MarchingSquares(oop_timer *Timer);
     
     
     //
@@ -123,7 +125,10 @@ class MarchingSquares {
     std::vector<u32> Data;
     u32 *DataPtr;
     
+    oop_timer *Timer;
+    
     v2 CellSize;
+    
     u32 CellCountX = 0;
     u32 CellCountY = 0;
 };

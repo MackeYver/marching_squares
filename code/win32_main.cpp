@@ -35,6 +35,7 @@
 
 #include "Mathematics.h"
 #include "oop_std.h"
+#include "oop_timer.h"
 
 
 #include <stdio.h>
@@ -311,6 +312,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 const Width = 1024;
     u32 const Height = 1024;
     
+    oop_timer *Timer = new oop_timer();
+    
     //
     // Create window
     HWND hWnd;
@@ -429,7 +432,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     // Generate lines from data using Marching Squares
-    MarchingSquares MS;
+    MarchingSquares MS(Timer);
     directx_renderable *GridLines;
     GridLines = (directx_renderable *)calloc(gDataCount, sizeof(directx_renderable));
     assert(GridLines);
@@ -451,10 +454,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             
             MSConfig.SourceHasOriginUpperLeft = true;
             
-            //MS.CopyData(Data[kDataSet], DataSize[kDataSet], &MSConfig);
             MS.SetDataPtr(Data[Index], &MSConfig);
             int Result = MS.MarchSquares(Heights[Index]);
             assert(Result == MarchingSquares::Ok);
+            
             
             //
             // Buffers
@@ -462,6 +465,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             SetupBuffers(&DirectXState, &MS, &ContourLines[Index], &GridLines[Index]);
         }
     }
+    
+    
+    //
+    // Print times
+    Timer->PrintTimes();
     
     
     
@@ -619,6 +627,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // @debug
+#ifdef DEBUG
     IDXGIDebug *DebugInterface;
     {
         HMODULE hModule = GetModuleHandleA("Dxgidebug.dll");
@@ -639,6 +648,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             return 1;
         }
     }
+#endif
     
     
     
@@ -650,9 +660,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     ReleaseDirectXState(&DirectXState);
     
+#ifdef DEBUG
     OutputDebugString(L"***** Begin ReportLiveObjects call *****\n");
     DebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
     OutputDebugString(L"***** End   ReportLiveObjects call *****\n\n");
+    
+    if (DebugInterface) {
+        DebugInterface->Release();
+    }
+#endif
     
     if (GridLines)
     {
@@ -703,11 +719,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         CellSizes = nullptr;
     }
     
-    if (DebugInterface) {
-        DebugInterface->Release();
-    }
-    
     FreeConsole();
+    
+    delete Timer;
     
     return msg.wParam;
 }
