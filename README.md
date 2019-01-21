@@ -9,11 +9,12 @@ This project is licensed under the terms of the MIT license (see file LICENSE).
 
 
 ### Disclaimer
-- No part of the code in this project should be considered as a good example in any shape or form
+- The code in this project should probably not be considered as a good example in any shape or form
 - If you're looking for learning resources you probably should look elsewhere
 
 
 ### My goals
+- Re-learn DirectX (it was quite some time ago since I last looked at it)
 - Try out various coding styles and libraries (e.g. using the standard library vs not using the standard library)
 - Create a small, but cool, project that could be finished in a reasonable time frame
 - Get some experience in optimizing algorithms and code
