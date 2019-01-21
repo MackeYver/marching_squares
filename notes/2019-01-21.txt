@@ -8,13 +8,13 @@ Goal of the day:
 
 ##1. Pull out the DirectX code into its own thing
 -----------------------------------------------
-Done! Not most of the DirectX code is pulled out into its own thing, we could probably take it
+Done! Now most of the DirectX code is pulled out into its own thing, we could probably take it
 even further (next step would probably be to use a platform agnostic frontend and a platform
 specific backend), but this we'll do for now.
 
-Also changed the program so that it runs the algorithm on all the data, for now we have only
-five sets of data. The use can change which of the results that gets rendered to the screen by
-pressing the I key.
+Also changed the program so that it runs the algorithm on all the data sets, for now we have 
+only five sets of data. The use can change which of the results that gets rendered to the 
+screen by pressing the I key.
 
 
 
@@ -33,7 +33,7 @@ precision of less than a microsecond. Which is good!
 The first run with timers shows that most of the time is spent in the "marching squares" part, 
 that is, not in the two simplifying post-processes steps.
 
-One example from the program (compiled as debug):
+One example from the program (compiled as debug), in microseconds:
 
 Total            21886 (100.0%)
   MarchSquares     18292 (83.6%)
@@ -74,7 +74,7 @@ Total             9650 (100.0%)
     MergeLines          52 ( 8.4%)
 
 
-A lot faster, ant it looks like the time taken spread more between the different parts, or
+A lot faster, and it looks like the time taken spread more between the different parts, or
 rather it looks like the lerp step got a lot faster in relation to the other steps. Did
 perhaps the compiler help us with removing/not performing the un-used interpolation 
 calculations?
