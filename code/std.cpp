@@ -22,18 +22,42 @@
 // SOFTWARE.
 //
 
-
-#include "oop_std.h"
+#include "std.h"
 #include "oop_timer.h"
 
 #include <assert.h>
-#include <stdio.h>
+#include <map>
 
-using namespace std;
 
 
 //
-// Line points
+// Structs
+//
+struct line_segment {
+    v2 P[2];
+    b32 IsProcessed;
+};
+
+line_segment LineSegment(v2 P0, v2 P1)
+{
+    line_segment Result;
+    Result.P[0] = P0;
+    Result.P[1] = P1;
+    Result.IsProcessed = false;
+    return Result;
+}
+
+struct line_point
+{
+    v2 P;
+    u32 LineIndex;
+};
+
+
+
+//
+// Utility functions
+//
 inline u32 CalculateKey(v2 const& P)
 {
     // 3847 is a prime, choosen due to it being a bit larger than 3840 which is the width of 4k display.
@@ -42,96 +66,10 @@ inline u32 CalculateKey(v2 const& P)
     return 3847*(u32)P.y + (u32)P.x;
 }
 
-b32 CompareLinePoints(MarchingSquares::line_point const& a, MarchingSquares::line_point const& b)
-{
-    return CalculateKey(a.P) < CalculateKey(b.P);
-}
-
-b32 Equal(MarchingSquares::line_point const& a, MarchingSquares::line_point const& b)
-{
-    if (AlmostEqualRelative(a.P.x, b.P.x) && AlmostEqualRelative(a.P.y, b.P.y))  return true;
-    return false;
-}
 
 
-
-//
-// Line segments
-inline MarchingSquares::line_segment LineSegment(v2 const& A, v2 const& B)
-{
-    MarchingSquares::line_segment Result;
-    Result.P[0] = A;
-    Result.P[1] = B;
-    Result.IsProcessed = false;
-    
-    return Result;
-}
-
-
-
-//
-// Constructor
-// 
-MarchingSquares::MarchingSquares(oop_timer *Timer_)
-: CellCountX(0), CellCountY(0), CellSize({}), DataPtr(nullptr)
-{
-    Timer = Timer_;
-}
-
-
-
-// Setters
-//
-void MarchingSquares::SetConfig(config const *Config)
-{
-    CellCountX = Config->CellCountX;
-    CellCountY = Config->CellCountY;
-    CellSize = Config->CellSize;
-}
-
-void MarchingSquares::SetDataPtr(std::vector<u32> *Heights, config const *Config)
-{
-    assert(Heights);
-    Data.clear();
-    DataPtr = Heights->data();
-    SetConfig(Config);
-}
-
-void MarchingSquares::SetDataPtr(u32 *Heights, config const *Config)
-{
-    assert(Heights);
-    Data.clear();
-    DataPtr = Heights;
-    SetConfig(Config);
-}
-
-void MarchingSquares::CopyData(std::vector<u32> *Heights, config const *Config)
-{
-    assert(Heights);
-    Data.clear();
-    copy(Heights->begin(), Heights->end(), back_inserter(Data));
-    DataPtr = Data.data();
-    SetConfig(Config);
-}
-
-void MarchingSquares::CopyData(u32 *Heights, u32 HeightsCount, config const *Config)
-{
-    assert(Heights);
-    Data.clear();
-    copy(Heights, Heights + HeightsCount, back_inserter(Data));
-    DataPtr = Data.data();
-    SetConfig(Config);
-}
-
-
-
-//
-// The algorithm(TM)
-//
-
-/** @desc Utility function, used by "march_squares()" in order to add Line_segments. */
-inline void Add(vector<MarchingSquares::line_segment>& LineSegments, 
-                map<u32, vector<MarchingSquares::line_point> >& Points, 
+inline void Add(std::vector<line_segment>& LineSegments, 
+                std::map<u32, std::vector<line_point> >& Points, 
                 v2 Po, // Origo (or offset, depends on how you look at it I guess...)
                 v2 P0, // First point of the line
                 v2 P1) // Second point of the line
@@ -142,7 +80,7 @@ inline void Add(vector<MarchingSquares::line_segment>& LineSegments,
     u32 Index = LineSegments.size();
     LineSegments.push_back(LineSegment(P0, P1));
     
-    MarchingSquares::line_point LP;
+    line_point LP;
     LP.P = P0;
     LP.LineIndex = Index;
     u32 Key = CalculateKey(LP.P);
@@ -155,7 +93,7 @@ inline void Add(vector<MarchingSquares::line_segment>& LineSegments,
 }
 
 
-/** @desc Utility function, linear interpolation between two heights */
+/** Linear interpolation between two heights */
 inline f32 Lerp(f32 Length, f32 H0, f32 H1, f32 CurrentHeight) {
     f32 Result = 0.0f;
     
@@ -177,14 +115,11 @@ inline f32 Lerp(f32 Length, u32 H0, u32 H1, f32 CurrentHeight) {
 }
 
 
-//
-// Reduce the primitive soup
-// i.e. meld vertices
-//
-MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::line_segment>& LineSegments, 
-                                                  std::map<u32, std::vector<MarchingSquares::line_point> >& LinePoints,
-                                                  MarchingSquares::line_segment *CurrLine,
-                                                  u32 DirectionIndex)
+
+line_segment *GetNextLineSegment(std::vector<line_segment>& LineSegments, 
+                                 std::map<u32, std::vector<line_point> >& LinePoints,
+                                 line_segment *CurrLine,
+                                 u32 DirectionIndex)
 {
     assert(CurrLine);
     
@@ -193,14 +128,14 @@ MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::l
     u32 Count = LinePoints.count(Key);
     assert(Count > 0); // There will always exist at least one point that generates this key
     
-    std::vector<MarchingSquares::line_point> *Points = &LinePoints[Key];
+    std::vector<line_point> *Points = &LinePoints[Key];
     assert(Points->size() != 0); // There will always exist at least one point that generates this key
     for (auto& Point : *Points)
     {
         assert(Point.LineIndex >= 0);
         assert(Point.LineIndex < LineSegments.size());
         
-        MarchingSquares::line_segment *NextLine = &LineSegments[Point.LineIndex];
+        line_segment *NextLine = &LineSegments[Point.LineIndex];
         if (NextLine != CurrLine)
         {
             return NextLine;
@@ -210,14 +145,16 @@ MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::l
     return nullptr; // No connected lines in the direction of the given index!
 }
 
-void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments, 
-                  std::map<u32, std::vector<MarchingSquares::line_point> >& LinePoints,
-                  MarchingSquares::line_segment& LineInChain, 
-                  vector<MarchingSquares::line_segment>& Chain)
+
+
+void GetLineChain(std::vector<line_segment>& LineSegments, 
+                  std::map<u32, std::vector<line_point> >& LinePoints,
+                  line_segment& LineInChain, 
+                  std::vector<line_segment>& Chain)
 {
     Chain.clear();
     
-    MarchingSquares::line_segment *Line = &LineInChain;
+    line_segment *Line = &LineInChain;
     
     //
     // "Forward in the chain"
@@ -248,22 +185,33 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
 }
 
 
-/** @desc Executes the algorithm. Requires that data_ptr != nullptr, width >= 2, height >= 2.
-The resultant line segments will be in a "unit square", i.e. x : [0, 1], y : [0, 1] */
-MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &LevelHeights) {
-    if (!DataPtr)                 return NoData;
-    if (CellCountX < 2)           return InvalidCellCountX;
-    if (CellCountY < 2)           return InvalidCellCountY;
-    if (CellSize.x <= 0.0f)       return InvalidCellSize;
-    if (CellSize.y <= 0.0f)       return InvalidCellSize;
-    if (LevelHeights.size() == 0) return InvalidLevelHeight;
+
+//
+// ThE aLGorItHM (tM)
+// 
+b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_timer *Timer)
+{
+    assert(State);
+    if (State->CellCountX == 0)  return false;
+    if (State->CellCountY == 0)  return false;
+    if (AlmostEqualRelative(State->CellSize, v2_zero))  return false;
+    if (!State->DataPtr)  return false;
     
-    Vertices.clear();
-    Indices.clear();
+    u32 CellCountX = State->CellCountX;
+    u32 CellCountY = State->CellCountY;
+    v2  CellSize   = State->CellSize;
+    std::vector<v2>  *Vertices = &State->Vertices;
+    std::vector<u16> *Indices  = &State->Indices;
+    
+    Vertices->clear();
+    Indices->clear();
     
     std::vector<line_segment> LineSegments;
     std::map<u32, std::vector<line_point> > LinePoints;
     
+    
+    //
+    // Performance measurement
     time_measure *Root = Timer->AddNewRoot();
     
     time_measure *TMS = Root->AddChild("MarchSquares");
@@ -277,11 +225,13 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
     
     Root->Start();
     
+    //
+    // Iterate through all the heights
     for (auto& CurrHeight : LevelHeights) {
         LineSegments.clear();
         LinePoints.clear();
         
-        u32 *Begin  = DataPtr;
+        u32 *Begin  = State->DataPtr;
         u32 *It;
         
         TMS->Start();
@@ -364,14 +314,14 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
             {
                 if (CurrLine.IsProcessed)  continue;
                 
-                vector<line_segment> CurrChain;
+                std::vector<line_segment> CurrChain;
                 
                 TChain->Start();
                 GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
                 TChain->Stop();
                 
                 TMerge->Start();
-                for (vector<line_segment>::size_type LineIndex = 0;
+                for (std::vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChain.size();
                      ++LineIndex)
                 {
@@ -392,15 +342,15 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                         continue;
                     }
                     
-                    Indices.push_back((u16)Vertices.size());
-                    Vertices.push_back(P0);
+                    Indices->push_back((u16)Vertices->size());
+                    Vertices->push_back(P0);
                     
                     if (LineIndex == CurrChain.size() - 1)
                     {
-                        Indices.push_back((u16)Vertices.size());
-                        Vertices.push_back(P1);
+                        Indices->push_back((u16)Vertices->size());
+                        Vertices->push_back(P1);
                         
-                        Indices.push_back((u16)0xFFFF);
+                        Indices->push_back((u16)0xFFFF);
                     }
                 }
                 TMerge->Stop();
@@ -410,5 +360,5 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
     }
     Root->Stop();
     
-    return Ok;
+    return true;
 }

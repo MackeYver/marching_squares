@@ -37,6 +37,8 @@
 #include "oop_std.h"
 #include "oop_timer.h"
 
+#include "std.h"
+
 
 #include <stdio.h>
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
@@ -53,6 +55,9 @@
 
 
 
+//
+// Globals
+//
 static f32 const gBackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
 static b32 gLabelRender = false;
 static u32 gLabelDistance = 1;
@@ -61,11 +66,13 @@ static b32 gGridRender = true;
 static u32 gRenderIndex = 0;
 static u32 gDataCount = 0;
 
-
 static v2 gPadding = V2(20.0f, 20.0f);
 
 
 
+//
+// File reading using the win32 API.
+//
 b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
 {
     assert(PathAndName);
@@ -156,6 +163,9 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
 
 
 
+//
+// Call the init code in the DirectX file
+//
 void SetupDirectX(directx_state *State, directx_config *Config)
 {
     assert(State);
@@ -179,6 +189,9 @@ void SetupDirectX(directx_state *State, directx_config *Config)
 
 
 
+//
+// Create buffers from the generated lines, also generate grid lines
+// 
 b32 SetupBuffers(directx_state *State,
                  MarchingSquares *MS,
                  directx_renderable_indexed *ContourLines, 
@@ -201,7 +214,7 @@ b32 SetupBuffers(directx_state *State,
     // Gridlines
     u32 CellCountX = MS->GetCellCountX();
     u32 CellCountY = MS->GetCellCountY();
-    v2 CellSize = MS->GetCellSize();
+    v2  CellSize = MS->GetCellSize();
     
     u32 VertexCountGridLines = 2 * (CellCountX + CellCountY);
     size_t Size = VertexCountGridLines * sizeof(v2);
@@ -274,12 +287,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             else if (wParam >= 0x31 && wParam <= 0x39) // 1-9
             {
                 gLabelDistance = wParam - 0x31 + 1;
-                //DebugPrint(L"gLabelDistance = %d\n", gLabelDistance);
             }
             else if (wParam >= 0x60 && wParam <= 0x69) // 1-9
             {
                 gLabelDistance = wParam - 0x60 + 1;
-                //DebugPrint(L"gLabelDistance = %d\n", gLabelDistance);
             }
         } break;
         
@@ -302,7 +313,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine, int nShowCmd) 
 {
     //
-    // Attach console
+    // Creata and attach console
+    //
     FILE *FileStdOut;
     assert(AllocConsole());
     freopen_s(&FileStdOut, "CONOUT$", "w", stdout);
@@ -312,10 +324,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     u32 const Width = 1024;
     u32 const Height = 1024;
     
-    oop_timer *Timer = new oop_timer();
     
     //
     // Create window
+    //
     HWND hWnd;
     {
         wchar_t const ClassName[] = L"MarchingSquares";
@@ -371,19 +383,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Init DirectX 10
+    //
     directx_state DirectXState = {};
-    
-    directx_config Config;
-    Config.Width = Width;
-    Config.Height = Height;
-    Config.hWnd = hWnd;
-    
-    SetupDirectX(&DirectXState, &Config);
+    {
+        directx_config Config;
+        Config.Width = Width;
+        Config.Height = Height;
+        Config.hWnd = hWnd;
+        
+        SetupDirectX(&DirectXState, &Config);
+    }
     
     
     
     //
-    // Read data from file (using Win32)
+    // Prepare some storage for the data
+    //
     char const *AllPaths[] = 
     {
         "c:\\developer\\Marching_squares\\data\\test.txt",
@@ -424,15 +439,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     DataSize = (u32 *)malloc(gDataCount * sizeof(u32));
     assert(DataSize);
     
+    u32 *CompareVertexCount = (u32 *)calloc(gDataCount, sizeof(u32));
+    assert(CompareVertexCount);
+    
+    u32 *CompareIndexCount = (u32 *)calloc(gDataCount, sizeof(u32));
+    assert(CompareIndexCount);
+    
+    
+    //
     // Read heights from text file
+    //
     for (u32 Index = 0; Index < gDataCount; ++Index)
     {
         b32 Result = ReadHeightsFromFileWin32(AllPaths[Index], &Data[Index], &DataSize[Index]);
         assert(Result);
     }
     
-    // Generate lines from data using Marching Squares
-    MarchingSquares MS(Timer);
+    
+    
+    
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // OOP version
+    // - Generate lines from data using Marching Squares, OOP version
+    // - Note: we're also generating the vertex- and index-buffers here.
+    //
     directx_renderable *GridLines;
     GridLines = (directx_renderable *)calloc(gDataCount, sizeof(directx_renderable));
     assert(GridLines);
@@ -441,7 +472,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     ContourLines = (directx_renderable_indexed *)calloc(gDataCount, sizeof(directx_renderable_indexed));
     assert(ContourLines);
     {
+        oop_timer *Timer = new oop_timer();
+        assert(Timer);
+        
+        MarchingSquares MS(Timer);
         MarchingSquares::config MSConfig;
+        
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
             MSConfig.CellCountX = CellCounts[2 * Index];
@@ -458,25 +494,67 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             int Result = MS.MarchSquares(Heights[Index]);
             assert(Result == MarchingSquares::Ok);
             
+            // Store the vertex and the index count, this will be used for comparing the different solutions
+            // with each other (in other words, we're assuming that this solution is correct).
+            CompareVertexCount[Index] = MS.GetVertexCount();
+            CompareIndexCount[Index]  = MS.GetIndexCount();
+            
             
             //
-            // Buffers
+            // Buffers, create them from this version (buffer creation not included in the perfomance measurement).
             //
             SetupBuffers(&DirectXState, &MS, &ContourLines[Index], &GridLines[Index]);
         }
+        
+        printf("\n************** START, OOP, std **************\n");
+        Timer->PrintTimesCSV();
+        printf("************** END,   OOP, std **************\n\n");
+        delete Timer;
     }
     
     
+    
+    
+    ///////////////////////////////////////////////////////////////////////////////////////
     //
-    // Print times
-    Timer->PrintTimes();
+    // Non-OOP but std version
+    // - Generate lines from data using Marching Squares, non-OOP but using standard library version
+    //
+    {
+        oop_timer *Timer = new oop_timer();
+        assert(Timer);
+        
+        std_state State;
+        
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            State.CellSize = CellSizes[Index];
+            State.CellCountX = CellCounts[2 * Index];
+            State.CellCountY = CellCounts[2 * Index + 1];
+            State.DataPtr = Data[Index];
+            
+            // TODO(Marcus): hey, are we handling this correctly? MSConfig.SourceHasOriginUpperLeft = true;
+            
+            b32 Result = MarchSquares(&State, Heights[Index], Timer);
+            assert(Result);
+            
+            // Let's compare the result againts the std-OOP version.
+            assert(State.Vertices.size() == CompareVertexCount[Index]);
+            assert(State.Indices.size()  == CompareIndexCount[Index]);
+        }
+        
+        printf("\n************ START, Non-OOP, std ************\n");
+        Timer->PrintTimesCSV();
+        printf("************ END,   Non-OOP, std ************\n\n");
+        delete Timer;
+    }
+    
     
     
     
     //
     // Constant buffer, used by the shaders
-    directx_buffer ConstantBuffer;
-    
+    //
     struct shader_constants
     {
         m4 TransformMatrix;
@@ -484,6 +562,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         f32 Z;
     };
     
+    directx_buffer ConstantBuffer;
     shader_constants ShaderConstants;
     {
         f32 Far = 1.0f;
@@ -516,15 +595,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Show and update window
+    // Note: we're waiting until here with displaying the window, this will maybe avoid a blank
+    //       and unresponsive window showing for a while (while the program is calculating).
+    //
     ShowWindow(hWnd, nShowCmd);
     UpdateWindow(hWnd);
     
     
     
-    
-    
     //
     // The main loop
+    //
     u32 const stride = sizeof(v2);
     u32 const offset = 0;
     
@@ -654,10 +735,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     //
     // Clean up
+    //
     ReleaseDirectWrite(&DirectWriteState);
-    
     ReleaseBuffer(&ConstantBuffer);
-    
     ReleaseDirectXState(&DirectXState);
     
 #ifdef DEBUG
@@ -677,7 +757,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             ReleaseRenderable(&GridLines[Index]);
         }
         free(GridLines);
-        GridLines = nullptr;
     }
     
     
@@ -688,40 +767,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             ReleaseRenderable(&ContourLines[Index]);
         }
         free(ContourLines);
-        ContourLines = nullptr;
-    }
-    
-    if (DataSize)
-    {
-        free(DataSize);
-        DataSize = nullptr;
     }
     
     if (Data)
     {
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            if (Data[Index])
-            {
-                free(Data[Index]);
-                Data[Index] = nullptr;
-            }
+            if (Data[Index])  free(Data[Index]);
         }
-        
-        free(Data);
-        gDataCount = 0;
-        Data = nullptr;
     }
     
-    if (CellSizes)
-    {
-        free(CellSizes);
-        CellSizes = nullptr;
-    }
+    free(Data);
+    
+    if (DataSize)            free(DataSize);
+    if (CellSizes)           free(CellSizes);
+    if (CompareVertexCount)  free(CompareVertexCount);
+    if (CompareIndexCount)   free(CompareIndexCount);
     
     FreeConsole();
-    
-    delete Timer;
     
     return msg.wParam;
 }

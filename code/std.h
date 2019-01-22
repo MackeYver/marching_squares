@@ -22,56 +22,24 @@
 // SOFTWARE.
 //
 
-#ifndef oop_timer__h
-#define oop_timer__h
+#include "Mathematics.h"
 
-#include <windows.h>
-
-#include <map>
 #include <vector>
 
-
-
 class oop_timer;
-class time_measure
+
+
+
+struct std_state
 {
-    friend oop_timer;
+    std::vector<v2>  Vertices;
+    std::vector<u16> Indices;
     
-    public:
-    void Start();
-    void Stop();
+    u32 *DataPtr;
     
-    time_measure *AddChild(std::string Name);
-    
-    void PrintNodeAndChilds(std::string Name, time_measure& Measure, 
-                            LARGE_INTEGER Frequency, int Padding, LARGE_INTEGER ParentTime);
-    
-    void PrintNodeAndChildsCSV(std::string Name, time_measure& Measure, 
-                               LARGE_INTEGER Frequency, int Padding, LARGE_INTEGER ParentTime);
-    
-    
-    protected:
-    std::map<std::string, time_measure> Children;
-    
-    LARGE_INTEGER StartTime;
-    LARGE_INTEGER TotalTime;
-    
-    bool IsRunning = false;
+    u32 CellCountX = 0;
+    u32 CellCountY = 0;
+    v2 CellSize = v2_zero;
 };
 
-class oop_timer
-{
-    public:
-    oop_timer();
-    time_measure *AddNewRoot();
-    void PrintTimes();
-    void PrintTimesCSV();
-    
-    
-    private:
-    std::vector<time_measure> Roots;
-    LARGE_INTEGER Frequency;
-};
-
-
-#endif
+b32 MarchSquares(std_state *State, std::vector<f32> const& Heights, oop_timer *Timer);

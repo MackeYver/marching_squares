@@ -35,9 +35,9 @@
 #include <map>
 #include "Mathematics.h"
 
+
+
 class oop_timer;
-
-
 
 //
 // Base class

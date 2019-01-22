@@ -85,6 +85,27 @@ void time_measure::PrintNodeAndChilds(std::string Name, time_measure& Measure,
     }
 }
 
+void time_measure::PrintNodeAndChildsCSV(std::string Name, time_measure& Measure, 
+                                         LARGE_INTEGER Frequency, int Padding, LARGE_INTEGER ParentTime)
+{
+    LARGE_INTEGER ElapsedMicroseconds;
+    ElapsedMicroseconds.QuadPart = Measure.TotalTime.QuadPart * 1000000;
+    ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
+    
+    float Percentage = 100.0f * (float)ElapsedMicroseconds.QuadPart / (float)ParentTime.QuadPart;
+    
+    for (int Index = 0; Index < Padding; ++Index)
+    {
+        printf(" ");
+    }
+    printf("%s;%llu;%4.1f\n", Name.c_str(), ElapsedMicroseconds.QuadPart, Percentage);
+    
+    for (auto& it : Measure.Children)
+    {
+        PrintNodeAndChildsCSV(it.first, it.second, Frequency, Padding + 2, ElapsedMicroseconds); 
+    }
+}
+
 
 
 //
@@ -114,5 +135,19 @@ void oop_timer::PrintTimes()
         
         it.PrintNodeAndChilds("Total", it, Frequency, 0, TotalTime);
         printf("-----------------------------\n");
+    }
+}
+
+
+void oop_timer::PrintTimesCSV()
+{
+    for (auto& it : Roots)
+    {
+        LARGE_INTEGER TotalTime;
+        TotalTime.QuadPart = it.TotalTime.QuadPart * 1000000;
+        TotalTime.QuadPart /= Frequency.QuadPart;
+        
+        printf("%s;%s;%s\n", "Name", "Time", "Percentage");
+        it.PrintNodeAndChildsCSV("Total", it, Frequency, 0, TotalTime);
     }
 }

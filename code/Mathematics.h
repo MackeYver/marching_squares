@@ -114,6 +114,7 @@ inline b32 AlmostEqualRelative(f32 a, f32 b, f32 MaxRelDiff = FLT_EPSILON)
 
 
 
+
 //
 // Vectors
 //
@@ -143,6 +144,11 @@ inline v2 V2(u32 x, u32 y) {
     Result.x = (f32)x;
     Result.y = (f32)y;
     return Result;
+}
+
+inline b32 AlmostEqualRelative(v2 A, v2 B, f32 MaxRelDiff = FLT_EPSILON)
+{
+    return AlmostEqualRelative(A.x, B.x) && AlmostEqualRelative(A.y, B.y);
 }
 
 //
