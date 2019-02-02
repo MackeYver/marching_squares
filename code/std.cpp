@@ -23,7 +23,6 @@
 //
 
 #include "std.h"
-#include "oop_timer.h"
 
 #include <assert.h>
 #include <map>
@@ -177,7 +176,7 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     
     while (Line && !Line->IsProcessed)
     {
-        Chain.insert(Chain.begin(), *Line); // SLOOOOOOOOW!
+        Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
         
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
@@ -189,7 +188,7 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
 //
 // ThE aLGorItHM (tM)
 // 
-b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_timer *Timer)
+b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
 {
     assert(State);
     if (State->CellCountX == 0)  return false;
@@ -211,22 +210,8 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
     
     
     //
-    // Performance measurement
-    time_measure *Root = Timer->AddNewRoot();
-    
-    time_measure *TMS = Root->AddChild("MarchSquares");
-    time_measure *TBinarySum = TMS->AddChild("BinarySum");
-    time_measure *TLerp = TMS->AddChild("Lerp");
-    time_measure *TSwitch = TMS->AddChild("Switch");
-    
-    time_measure *TSimplify = Root->AddChild("Simplify");
-    time_measure *TChain = TSimplify->AddChild("GetLineChain");
-    time_measure *TMerge = TSimplify->AddChild("MergeLines");
-    
-    Root->Start();
-    
-    //
     // Iterate through all the heights
+    StartMeasure(&State->TTotal);
     for (auto& CurrHeight : LevelHeights) {
         LineSegments.clear();
         LinePoints.clear();
@@ -234,14 +219,12 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
         u32 *Begin  = State->DataPtr;
         u32 *It;
         
-        TMS->Start();
-        
         //
         // March the Squares!
+        StartMeasure(&State->TMarching);
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                TBinarySum->Start();
-                
+                StartMeasure(&State->TBinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -258,22 +241,21 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
+                StopMeasure(&State->TBinarySum);
                 
-                TBinarySum->Stop();
-                TLerp->Start();
                 
                 //
                 // Vertices, on for each edge of the cell
+                StartMeasure(&State->TLerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
+                StopMeasure(&State->TLerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                TLerp->Stop();
-                TSwitch->Start();
-                
+                StartMeasure(&State->TAdd);
                 switch (Sum) {
                     case 1: Add(LineSegments, LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(LineSegments, LinePoints, P, Bottom, Right);   break;
@@ -298,15 +280,15 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
                     case 13: Add(LineSegments, LinePoints, P, Right , Bottom); break;
                     case 14: Add(LineSegments, LinePoints, P, Bottom, Left);   break;
                 }
-                TSwitch->Stop();
+                StopMeasure(&State->TAdd);
             }
         }
-        
-        TMS->Stop();
-        TSimplify->Start();
+        StopMeasure(&State->TMarching);
         
         if (LineSegments.size() > 0)
         {
+            StartMeasure(&State->TSimplify);
+            
             f32 PrevSlope;
             f32 CurrSlope = 0.0f;
             
@@ -315,16 +297,16 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
                 if (CurrLine.IsProcessed)  continue;
                 
                 std::vector<line_segment> CurrChain;
-                
-                TChain->Start();
+                StartMeasure(&State->TGetLineChain);
                 GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
-                TChain->Stop();
+                StopMeasure(&State->TGetLineChain);
                 
-                TMerge->Start();
                 for (std::vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChain.size();
                      ++LineIndex)
                 {
+                    StartMeasure(&State->TMergeLines);
+                    
                     line_segment *Line = &CurrChain[LineIndex];
                     
                     v2 P0 = Line->P[0];
@@ -352,13 +334,14 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights, oop_tim
                         
                         Indices->push_back((u16)0xFFFF);
                     }
+                    StopMeasure(&State->TMergeLines);
                 }
-                TMerge->Stop();
             }
+            StopMeasure(&State->TSimplify);
         }
-        TSimplify->Stop();
     }
-    Root->Stop();
+    StopMeasure(&State->TTotal);
+    
     
     return true;
 }

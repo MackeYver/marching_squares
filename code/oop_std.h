@@ -31,13 +31,13 @@
 #ifndef Marching_squares_h
 #define Marching_squares_h
 
-#include <vector>
 #include <map>
+#include <vector>
+
 #include "Mathematics.h"
+#include "Timing.h"
 
 
-
-class oop_timer;
 
 //
 // Base class
@@ -61,7 +61,6 @@ class MarchingSquares {
         v2  CellSize;
         u32 CellCountX;
         u32 CellCountY;
-        b32 SourceHasOriginUpperLeft;
     };
     
     enum result {
@@ -78,7 +77,7 @@ class MarchingSquares {
     
     //
     // Constructor
-    MarchingSquares(oop_timer *Timer);
+    MarchingSquares();
     
     
     //
@@ -108,10 +107,36 @@ class MarchingSquares {
     
     u32 *DataBegin()                             {return DataPtr;}
     
-    
     //
     // Run the algorithm
     result MarchSquares(std::vector<f32> const &LevelHeights);
+    
+    
+    //
+    // @debug
+    union
+    {
+        struct
+        {
+            time_measure TTotal;
+            
+            time_measure TMarching;
+            time_measure TBinarySum;
+            time_measure TLerp;
+            time_measure TAdd;
+            
+            time_measure TSimplify;
+            time_measure TGetLineChain;
+            time_measure TMergeLines;
+        };
+        
+        time_measure Measures[8]; 
+    };
+    
+    void ClearTimeMeasures()
+    {
+        ZeroMemory(Measures, 8 * sizeof(time_measure));
+    }
     
     
     //
@@ -124,8 +149,6 @@ class MarchingSquares {
     
     std::vector<u32> Data;
     u32 *DataPtr;
-    
-    oop_timer *Timer;
     
     v2 CellSize;
     

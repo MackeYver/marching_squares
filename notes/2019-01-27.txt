@@ -1,0 +1,27 @@
+Goal of today:
+1. Implement the c style version of the algorithm (continuing from previous days)
+
+
+
+## Sidequest 1: Bugs
+------------------
+I change the build.bat in order to also build a fast debug build, or rather, compile the 
+code with optimization O2 but also with some debug options (/Zi). This caused the program
+to always hit a breakpoint or throw an exception in random code at exit. I checked all my
+code, in particular the DirectX cleanup but all seemed fine. I made sure that every object
+was properly released -- in a correct order -- but that didn't helpt at all.
+  Then I realised that I did use debugging features from DirectX. Perhaps some of the debug
+code in the DirectX libraries changed/compiled out when I compiled with O2? If I removed
+the DDEBUG as a build options (effectually removing the use of the DirectX debug features)
+it exited without any arbitrary errors. Fixed!
+  Hyopthesis: 
+    - debug features of DirectX will be compiled out if compiled as a non-optimized build.
+
+
+
+## 1. Implement the c style version of the algorithm
+--------------------------------------------------
+I have cheated a bit and opted to use Sean Barett's stretchy buffer implementation. I could
+implement it myself but that will have to wait for later. The same will be true for the
+implementation of a hash-table.
+

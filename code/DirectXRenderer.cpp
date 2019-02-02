@@ -154,16 +154,15 @@ void ReleaseDirectXState(directx_state *State)
 {
     if (State)
     {
+        ReleaseShader(&State->PixelShader);
+        ReleaseShader(&State->VertexShader);
+        
         State->RenderTargetView ? State->RenderTargetView->Release() : 0;
         State->DepthStencilState->Release() ? State->DepthStencilState->Release() : 0;
         State->DepthStencilView->Release() ? State->DepthStencilView->Release() : 0;
         State->DepthStencilBuffer->Release() ? State->DepthStencilBuffer->Release() : 0;
-        State->RenderTargetView->Release() ? State->RenderTargetView->Release() : 0;
         State->SwapChain->Release() ? State->SwapChain->Release() : 0;
         State->Device->Release() ? State->Device->Release() : 0;
-        
-        ReleaseShader(&State->PixelShader);
-        ReleaseShader(&State->VertexShader);
     }
 }
 
@@ -428,52 +427,6 @@ b32 CreateRenderable(directx_state *State,
     Result = CreateIndexBuffer(State, IndexData, IndexSize, IndexCount, &Renderable->IndexBuffer);
     assert(Result);
     
-    
-#if 0
-    size_t Size = VertexCount * sizeof(v2);
-    D3D10_BUFFER_DESC BufferDesc;
-    BufferDesc.ByteWidth = Size;                     // size of the buffer
-    BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-    BufferDesc.BindFlags = D3D10_BIND_VERTEX_BUFFER; // use in vertex shader
-    BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-    BufferDesc.MiscFlags = 0;                        // No other option
-    
-    D3D10_SUBRESOURCE_DATA InitData;
-    InitData.pSysMem = VertexData;
-    InitData.SysMemPitch = 0;
-    InitData.SysMemSlicePitch = 0;
-    
-    HRESULT Result = Device->CreateBuffer(&BufferDesc, &InitData, &Renderable->VertexBuffer);
-    if (FAILED(Result)) 
-    {
-        printf("Failed to create the Vertexbuffer\n");
-        return false;
-    }
-    
-    
-    //
-    // Indexbuffer
-    Renderable->IndexCount = IndexCount;
-    
-    Size = IndexCount * sizeof(u16);
-    BufferDesc.ByteWidth = Size;                     // size of the buffer
-    BufferDesc.Usage = D3D10_USAGE_DEFAULT;          // only usable by the GPU
-    BufferDesc.BindFlags = D3D10_BIND_INDEX_BUFFER;  // use in vertex shader
-    BufferDesc.CPUAccessFlags = 0;                   // No CPU access to the buffer
-    BufferDesc.MiscFlags = 0;                        // No other option
-    
-    InitData.pSysMem = IndexData;
-    InitData.SysMemPitch = 0;
-    InitData.SysMemSlicePitch = 0;
-    
-    Result = Device->CreateBuffer(&BufferDesc, &InitData, &Renderable->IndexBuffer);
-    if (FAILED(Result)) 
-    {
-        printf("Failed to create the Indexbuffer\n");
-        return false;
-    }
-#endif
-    
     Renderable->Topology = Topology;
     
     return true;
@@ -644,8 +597,8 @@ void ReleaseShader(vertex_shader *Shader)
 {
     if (Shader)
     {
-        Shader->Program ? Shader->Program->Release() : 0;
         Shader->InputLayout ? Shader->InputLayout->Release() : 0;
+        Shader->Program ? Shader->Program->Release() : 0;
     }
 }
 
@@ -754,6 +707,7 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
                                (void **)&D2DFactory);
     if (FAILED(Result))
     {
+        DWriteFactory->Release();
         printf("Failed to create the Direct2D factory!\n");
         return false;
     }
@@ -762,6 +716,8 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = DirectXState->Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&DXGIDevice);
     if (FAILED(Result))
     {
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to get the DXGIDevice from the D3D10Device1!\n");
         return false;
     }
@@ -769,6 +725,9 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = D2DFactory->CreateDevice(DXGIDevice, &State->Device);
     if (FAILED(Result))
     {
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to create the D2DDevice!\n");
         return false;
     }
@@ -777,6 +736,10 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = Device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &State->DeviceContext);
     if (FAILED(Result))
     {
+        State->Device->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to create the D2DDeviceContext!\n");
         return false;
     }
@@ -785,6 +748,11 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = DirectXState->SwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&D2DBuffer);
     if (FAILED(Result))
     {
+        State->DeviceContext->Release();
+        State->Device->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to get the backbuffer as IDXGISurface!\n");
         return false;
     }
@@ -801,6 +769,12 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = DeviceContext->CreateBitmapFromDxgiSurface(D2DBuffer, Properties, &State->RenderTarget);
     if (FAILED(Result))
     {
+        D2DBuffer->Release();
+        State->DeviceContext->Release();
+        State->Device->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to create the D2DBitmap!\n");
         return false;
     }
@@ -809,6 +783,13 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
     Result = DeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White, 1.0f), &State->Brush);
     if (FAILED(Result))
     {
+        State->RenderTarget->Release();
+        D2DBuffer->Release();
+        State->DeviceContext->Release();
+        State->Device->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to create the D2DBrush!\n");
         return false;
     }
@@ -823,6 +804,14 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
                                              &State->TextFormat);
     if (FAILED(Result))
     {
+        State->Brush->Release();
+        State->RenderTarget->Release();
+        D2DBuffer->Release();
+        State->DeviceContext->Release();
+        State->Device->Release();
+        DXGIDevice->Release();
+        D2DFactory->Release();
+        DWriteFactory->Release();
         printf("Failed to create the D2DTextFormat!\n");
         return false;
     }
@@ -843,11 +832,11 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
 void ReleaseDirectWrite(directwrite_state *State)
 {
     assert(State);
-    State->TextFormat->Release();
-    State->Brush->Release();
-    State->RenderTarget->Release();
-    State->DeviceContext->Release();
-    State->Device->Release();
+    State->TextFormat ? State->TextFormat->Release() : 0;
+    State->Brush ? State->Brush->Release() : 0;
+    State->RenderTarget ? State->RenderTarget->Release() : 0;
+    State->DeviceContext? State->DeviceContext->Release() : 0;
+    State->Device ? State->Device->Release() : 0;
 }
 
 

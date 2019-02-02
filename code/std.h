@@ -23,10 +23,9 @@
 //
 
 #include "Mathematics.h"
+#include "Timing.h"
 
 #include <vector>
-
-class oop_timer;
 
 
 
@@ -37,9 +36,30 @@ struct std_state
     
     u32 *DataPtr;
     
+    //
+    // @debug
+    union
+    {
+        struct
+        {
+            time_measure TTotal;
+            
+            time_measure TMarching;
+            time_measure TBinarySum;
+            time_measure TLerp;
+            time_measure TAdd;
+            
+            time_measure TSimplify;
+            time_measure TGetLineChain;
+            time_measure TMergeLines;
+        };
+        
+        time_measure Measures[8]; 
+    };
+    
     u32 CellCountX = 0;
     u32 CellCountY = 0;
     v2 CellSize = v2_zero;
 };
 
-b32 MarchSquares(std_state *State, std::vector<f32> const& Heights, oop_timer *Timer);
+b32 MarchSquares(std_state *State, std::vector<f32> const& Heights);

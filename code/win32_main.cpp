@@ -33,16 +33,33 @@
 #include <assert.h>
 #include <cctype>
 
+#include "Types.h"
 #include "Mathematics.h"
+
+#define kIterations 1
+#define kTest 1
+// 0 oop_std
+// 1 std
+// 2 c_style
+
+#if kTest == 0
 #include "oop_std.h"
-#include "oop_timer.h"
-
+#elif kTest == 1
 #include "std.h"
+#elif kTest == 2
+#include "stretchy_buffer.h"
+#include "c_style.h"
+#elif kTest > 2
+#error Invalid kTest value!
+#endif
 
 
+#ifdef DEBUG
 #include <stdio.h>
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
-
+#else
+#define DebugPrint(...)
+#endif
 
 
 //
@@ -90,7 +107,7 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
     {
         DWORD Error = GetLastError();
         DebugPrint(L"Failed to open file, error: %d\n", Error);
-        return false;
+        return Error;
     }
     
     LARGE_INTEGER FileSize;
@@ -103,10 +120,12 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
     DWORD BytesRead = 0;
     if (!ReadFile(File, FileData, (DWORD)FileSize.QuadPart, &BytesRead, nullptr) || BytesRead != FileSize.QuadPart)
     {
+        if (FileData)  free(FileData);
+        
         CloseHandle(File);
         DWORD Error = GetLastError();
         DebugPrint(L"Failed to read from file, error: %d", Error);
-        return false;
+        return Error;
     }
     
     CloseHandle(File);
@@ -139,7 +158,7 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
             continue;
         }
         
-        char SmallBuffer[10] = {};
+        char SmallBuffer[20] = {};
         
         u32 EndIndex = Index;
         while (EndIndex < FileSize.QuadPart && FileData[EndIndex] != ' ' && FileData[EndIndex] != '\n') {
@@ -147,7 +166,7 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
         }
         
         assert(EndIndex != Index);
-        assert(EndIndex - Index < 10);
+        assert(EndIndex - Index < 20);
         
         memcpy(SmallBuffer, &FileData[Index], EndIndex - Index);
         sscanf_s(SmallBuffer, "%d", &(*Data)[DataIndex++]);
@@ -160,6 +179,7 @@ b32 ReadHeightsFromFileWin32(const char *PathAndName, u32 **Data, u32 *DataSize)
     
     return true;
 }
+
 
 
 
@@ -193,29 +213,27 @@ void SetupDirectX(directx_state *State, directx_config *Config)
 // Create buffers from the generated lines, also generate grid lines
 // 
 b32 SetupBuffers(directx_state *State,
-                 MarchingSquares *MS,
-                 directx_renderable_indexed *ContourLines, 
-                 directx_renderable *GridLines)
+                 void *VertexDataPtr, u32 VertexCount,
+                 void *IndexDataPtr, u32 IndexCount,
+                 directx_renderable_indexed *ContourLines)
 {
-    assert(ContourLines);
-    assert(GridLines);
-    
     //
     // Contour lines
     b32 Result = CreateRenderable(State,
                                   ContourLines,
-                                  MS->GetVertexData()->data(), sizeof(v2) , MS->GetVertexCount(),
-                                  MS->GetIndexData()->data() , sizeof(u16), MS->GetIndexCount(),
+                                  VertexDataPtr, sizeof(v2) , VertexCount,
+                                  IndexDataPtr , sizeof(u16), IndexCount,
                                   D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
-    assert(Result);
-    
-    
+    return Result;
+}
+
+
+b32 SetupGridLines(directx_state *State,
+                   u32 CellCountX, u32 CellCountY, v2 CellSize,
+                   directx_renderable *GridLines)
+{
     //
     // Gridlines
-    u32 CellCountX = MS->GetCellCountX();
-    u32 CellCountY = MS->GetCellCountY();
-    v2  CellSize = MS->GetCellSize();
-    
     u32 VertexCountGridLines = 2 * (CellCountX + CellCountY);
     size_t Size = VertexCountGridLines * sizeof(v2);
     v2 *GridLineVertices = (v2 *)malloc(Size);
@@ -401,29 +419,58 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     char const *AllPaths[] = 
     {
-        "c:\\developer\\Marching_squares\\data\\test.txt",
-        "c:\\developer\\Marching_squares\\data\\volcano.txt",
-        "c:\\developer\\Marching_squares\\data\\test3_123x61.txt",
-        "c:\\developer\\Marching_squares\\data\\test4_175x111.txt",
-        "c:\\developer\\Marching_squares\\data\\test6_11x11.txt"
+        "..\\data\\volcano.txt",
+        "..\\data\\test3_123x61.txt",
+        "..\\data\\test4_175x111.txt",
+        "..\\data\\data_200x200.txt",
+        "..\\data\\data_1000x1000.txt",
     };
     
+#if kTest < 2
     std::vector<f32> Heights[] =
     {
-        {1, 2, 3, 4},
         {90, 100, 110, 120, 130, 140, 150, 160, 170},
-        {10, 20, 40, 60, 80, 100, 120, 140, 160},
+        {20, 40, 60, 80, 100, 120, 140, 160},
         {20, 40, 60, 80, 100, 120, 140},
-        {0, 1, 2, 3, 4}
+        {40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360},
+        {2, 3, 4, 5, 6, 7, 8, 9, 10},// 11, 12, 13, 14},
     };
+#else
+    f32 *Heights[5];
+    for (int i = 0; i < 9; ++i)
+    {
+        sb_push(Heights[0], 90.0f + (f32)(10*i));
+    }
+    
+    for (int i = 0; i < 9; ++i)
+    {
+        sb_push(Heights[1], 20.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 8; ++i)
+    {
+        sb_push(Heights[2], 20.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 17; ++i)
+    {
+        sb_push(Heights[3], 40.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 9; ++i)
+    {
+        sb_push(Heights[3], (f32)i);
+    }
+    
+#endif
     
     u32 CellCounts[] =
     {
-        11, 11,
         61, 87,
         123, 61,
         175, 111,
-        11, 11
+        200, 200,
+        1000, 1000,
     };
     
     gDataCount = sizeof(AllPaths) / sizeof(*AllPaths);
@@ -439,11 +486,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     DataSize = (u32 *)malloc(gDataCount * sizeof(u32));
     assert(DataSize);
     
-    u32 *CompareVertexCount = (u32 *)calloc(gDataCount, sizeof(u32));
-    assert(CompareVertexCount);
-    
-    u32 *CompareIndexCount = (u32 *)calloc(gDataCount, sizeof(u32));
-    assert(CompareIndexCount);
     
     
     //
@@ -457,13 +499,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     
     
+    //
+    // Open/create text files used as output for performance data
+    //
+    FILE *FilePerf;
+    FILE *FileData;
+    {
+        int ErrorCode = fopen_s(&FilePerf, "..\\perf\\perf.txt", "w");
+        assert(!ErrorCode);
+        fprintf(FilePerf, "Style;Optimization;Case#;Iteration#;Total;#;_Marching;_#;__BinarySum;__#;__Lerp;__#;");
+        fprintf(FilePerf, "__Add;__#;_Simplify;_#;__GetLineChain;__#;__MergeLines;__#\n");
+        
+        ErrorCode = fopen_s(&FileData, "..\\perf\\data.txt", "w");
+        assert(!ErrorCode);
+        fprintf(FileData, "Case#;Iteration#;");
+    }
     
-    ///////////////////////////////////////////////////////////////////////////////////////
+    
+    
+    
     //
-    // OOP version
-    // - Generate lines from data using Marching Squares, OOP version
-    // - Note: we're also generating the vertex- and index-buffers here.
-    //
+    // Memory for the renderables
+    // 
     directx_renderable *GridLines;
     GridLines = (directx_renderable *)calloc(gDataCount, sizeof(directx_renderable));
     assert(GridLines);
@@ -471,47 +528,96 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     directx_renderable_indexed *ContourLines;
     ContourLines = (directx_renderable_indexed *)calloc(gDataCount, sizeof(directx_renderable_indexed));
     assert(ContourLines);
+    
+    
+    
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // OOP version
+    // - Generate lines from data using Marching Squares, OOP version
+    // - Note: we're also generating the vertex- and index-buffers here.
+    //
+#if kTest == 0
     {
-        oop_timer *Timer = new oop_timer();
-        assert(Timer);
-        
-        MarchingSquares MS(Timer);
+        MarchingSquares MS;
         MarchingSquares::config MSConfig;
+        
+        LARGE_INTEGER Frequency;
+        QueryPerformanceFrequency(&Frequency);
         
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            MSConfig.CellCountX = CellCounts[2 * Index];
-            MSConfig.CellCountY = CellCounts[2 * Index + 1];
+            fprintf(FilePerf, "oop_std;");
+            fprintf(FileData, "oop_std;");
+#if OPTIMIZATION == 0
+            fprintf(FilePerf, "Od;");
+            fprintf(FileData, "Od;");
+#elif OPTIMIZATION == 1
+            fprintf(FilePerf, "O1;");
+            fprintf(FileData, "O1;");
+#elif OPTIMIZATION == 2
+            fprintf(FilePerf, "O2;");
+            fprintf(FileData, "O2;");
+#endif
+            fprintf(FilePerf, "%d;", Index);
+            fprintf(FileData, "%d;", Index);
             
-            f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(MSConfig.CellCountX - 1), 
-                                   (f32)(Height -2*gPadding.y) / (f32)(MSConfig.CellCountY - 1));
-            MSConfig.CellSize = V2(SmallestSize, SmallestSize);
-            CellSizes[Index] = MSConfig.CellSize;
-            
-            MSConfig.SourceHasOriginUpperLeft = true;
-            
-            MS.SetDataPtr(Data[Index], &MSConfig);
-            int Result = MS.MarchSquares(Heights[Index]);
-            assert(Result == MarchingSquares::Ok);
-            
-            // Store the vertex and the index count, this will be used for comparing the different solutions
-            // with each other (in other words, we're assuming that this solution is correct).
-            CompareVertexCount[Index] = MS.GetVertexCount();
-            CompareIndexCount[Index]  = MS.GetIndexCount();
-            
-            
-            //
-            // Buffers, create them from this version (buffer creation not included in the perfomance measurement).
-            //
-            SetupBuffers(&DirectXState, &MS, &ContourLines[Index], &GridLines[Index]);
+            for (int i = 0; i < kIterations; ++i)
+            {
+                fprintf(FilePerf, "%d;", i);
+                fprintf(FileData, "%d;", i);
+                
+                MSConfig.CellCountX = CellCounts[2 * Index];
+                MSConfig.CellCountY = CellCounts[2 * Index + 1];
+                
+                f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(MSConfig.CellCountX - 1), 
+                                       (f32)(Height -2*gPadding.y) / (f32)(MSConfig.CellCountY - 1));
+                MSConfig.CellSize = V2(SmallestSize, SmallestSize);
+                CellSizes[Index] = MSConfig.CellSize;
+                
+                MS.ClearTimeMeasures();
+                MS.SetDataPtr(Data[Index], &MSConfig);
+                
+                int Result = MS.MarchSquares(Heights[Index]);
+                assert(Result == MarchingSquares::Ok);
+                
+                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                {
+                    ConvertToMicroSeconds(&MS.Measures[MeasureIndex], &Frequency);
+                    fprintf(FilePerf, "%llu;%d", 
+                            MS.Measures[MeasureIndex].TotalTime.QuadPart, MS.Measures[MeasureIndex].Count);
+                    if (MeasureIndex < 7)
+                    {
+                        fprintf(FilePerf, ";");
+                    }
+                    else
+                    {
+                        fprintf(FilePerf, "\n");
+                    }
+                }
+                
+                fprintf(FileData, "\n");
+                
+                if (i == 0)
+                {
+                    //
+                    // Buffers, create them from this version (buffer creation not included in the 
+                    // perfomance measurement).
+                    Result = SetupBuffers(&DirectXState, 
+                                          MS.GetVertexData()->data(), MS.GetVertexCount(),
+                                          MS.GetIndexData()->data() , MS.GetIndexCount(),
+                                          &ContourLines[Index]);
+                    assert(Result);
+                    
+                    Result = SetupGridLines(&DirectXState, 
+                                            MS.GetCellCountX(), MS.GetCellCountY(), MS.GetCellSize(), 
+                                            &GridLines[Index]);
+                    assert(Result);
+                }
+            }
         }
-        
-        printf("\n************** START, OOP, std **************\n");
-        Timer->PrintTimesCSV();
-        printf("************** END,   OOP, std **************\n\n");
-        delete Timer;
     }
-    
+#endif // kTest == 0
     
     
     
@@ -520,35 +626,180 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // Non-OOP but std version
     // - Generate lines from data using Marching Squares, non-OOP but using standard library version
     //
+#if kTest == 1
     {
-        oop_timer *Timer = new oop_timer();
-        assert(Timer);
-        
         std_state State;
+        
+        LARGE_INTEGER Frequency;
+        QueryPerformanceFrequency(&Frequency);
         
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            State.CellSize = CellSizes[Index];
-            State.CellCountX = CellCounts[2 * Index];
-            State.CellCountY = CellCounts[2 * Index + 1];
-            State.DataPtr = Data[Index];
+            fprintf(FilePerf, "std;");
+            fprintf(FileData, "std;");
+#if OPTIMIZATION == 0
+            fprintf(FilePerf, "Od;");
+            fprintf(FileData, "Od;");
+#elif OPTIMIZATION == 1
+            fprintf(FilePerf, "O1;");
+            fprintf(FileData, "O1;");
+#elif OPTIMIZATION == 2
+            fprintf(FilePerf, "O1;");
+            fprintf(FileData, "O1;");
+#endif
+            fprintf(FilePerf, "%d;", Index);
+            fprintf(FileData, "%d;", Index);
             
-            // TODO(Marcus): hey, are we handling this correctly? MSConfig.SourceHasOriginUpperLeft = true;
-            
-            b32 Result = MarchSquares(&State, Heights[Index], Timer);
-            assert(Result);
-            
-            // Let's compare the result againts the std-OOP version.
-            assert(State.Vertices.size() == CompareVertexCount[Index]);
-            assert(State.Indices.size()  == CompareIndexCount[Index]);
+            for (int i = 0; i < kIterations; ++i)
+            {
+                fprintf(FilePerf, "%d;", i);
+                fprintf(FileData, "%d;", i);
+                
+                State.CellSize = CellSizes[Index];
+                State.CellCountX = CellCounts[2 * Index];
+                State.CellCountY = CellCounts[2 * Index + 1];
+                State.DataPtr = Data[Index];
+                f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(State.CellCountX - 1), 
+                                       (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
+                State.CellSize = V2(SmallestSize, SmallestSize);
+                
+                ZeroMemory(State.Measures, 8*sizeof(time_measure));
+                
+                b32 Result = MarchSquares(&State, Heights[Index]);
+                assert(Result);
+                
+                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                {
+                    ConvertToMicroSeconds(&State.Measures[MeasureIndex], &Frequency);
+                    fprintf(FilePerf, "%llu;%d", 
+                            State.Measures[MeasureIndex].TotalTime.QuadPart, State.Measures[MeasureIndex].Count);
+                    if (MeasureIndex < 7)
+                    {
+                        fprintf(FilePerf, ";");
+                    }
+                    else
+                    {
+                        fprintf(FilePerf, "\n");
+                    }
+                }
+                
+                fprintf(FileData, "\n");
+                
+                if (i == 0)
+                {
+                    //
+                    // Buffers, create them from this version (buffer creation not included in the 
+                    // perfomance measurement).
+                    Result = SetupBuffers(&DirectXState, 
+                                          State.Vertices.data(), State.Vertices.size(), 
+                                          State.Indices.data(), State.Indices.size(),
+                                          &ContourLines[Index]);
+                    assert(Result);
+                    
+                    Result = SetupGridLines(&DirectXState, 
+                                            State.CellCountX, State.CellCountY, State.CellSize, 
+                                            &GridLines[Index]);
+                    assert(Result);
+                }
+            }
         }
-        
-        printf("\n************ START, Non-OOP, std ************\n");
-        Timer->PrintTimesCSV();
-        printf("************ END,   Non-OOP, std ************\n\n");
-        delete Timer;
     }
+#endif // kTest == 1
     
+    
+    
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // c style version
+    // - Generate lines from data using Marching Squares, non-OOP and not using standard library
+    //
+#if kTest == 2
+    {
+        c_style_state State;
+        
+        LARGE_INTEGER Frequency;
+        QueryPerformanceFrequency(&Frequency);
+        
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            fprintf(FilePerf, "c_style;");
+            fprintf(FileData, "c_style;");
+#if OPTIMIZATION == 0
+            fprintf(FilePerf, "Od;");
+            fprintf(FileData, "Od;");
+#elif OPTIMIZATION == 1
+            fprintf(FilePerf, "O1;");
+            fprintf(FileData, "O1;");
+#elif OPTIMIZATION == 2
+            fprintf(FilePerf, "O1;");
+            fprintf(FileData, "O1;");
+#endif
+            fprintf(FilePerf, "%d;", Index);
+            fprintf(FileData, "%d;", Index);
+            
+            for (int i = 0; i < kIterations; ++i)
+            {
+                fprintf(FilePerf, "%d;", i);
+                fprintf(FileData, "%d;", i);
+                
+                State.CellSize = CellSizes[Index];
+                State.CellCountX = CellCounts[2 * Index];
+                State.CellCountY = CellCounts[2 * Index + 1];
+                State.DataPtr = Data[Index];
+                f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(State.CellCountX - 1), 
+                                       (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
+                State.CellSize = V2(SmallestSize, SmallestSize);
+                
+                ZeroMemory(State.Measures, 8*sizeof(time_measure));
+                
+                b32 Result = MarchSquares(&State, Heights[Index]);
+                assert(Result);
+                
+                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                {
+                    ConvertToMicroSeconds(&State.Measures[MeasureIndex], &Frequency);
+                    fprintf(FilePerf, "%llu;%d", 
+                            State.Measures[MeasureIndex].TotalTime.QuadPart, State.Measures[MeasureIndex].Count);
+                    if (MeasureIndex < 7)
+                    {
+                        fprintf(FilePerf, ";");
+                    }
+                    else
+                    {
+                        fprintf(FilePerf, "\n");
+                    }
+                }
+                
+                fprintf(FileData, "\n");
+                
+                if (i == 0)
+                {
+                    //
+                    // Buffers, create them from this version (buffer creation not included in the 
+                    // perfomance measurement).
+                    Result = SetupBuffers(&DirectXState, 
+                                          State.Vertices, sb_count(State.Vertices), 
+                                          State.Indices, sb_count(State.Indices),
+                                          &ContourLines[Index]);
+                    assert(Result);
+                    
+                    Result = SetupGridLines(&DirectXState, 
+                                            State.CellCountX, State.CellCountY, State.CellSize, 
+                                            &GridLines[Index]);
+                    assert(Result);
+                }
+            }
+        }
+    }
+#endif // kTest == 2
+    
+    
+    
+    //
+    // Close files
+    //
+    fclose(FileData);
+    fclose(FilePerf);
     
     
     
@@ -606,9 +857,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // The main loop
     //
-    u32 const stride = sizeof(v2);
-    u32 const offset = 0;
-    
     b32 ShouldRun = true;
     MSG msg;
     while (ShouldRun) 
@@ -736,8 +984,52 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Clean up
     //
+    if (DataSize)
+    {
+        free(DataSize);
+    }
+    
+    if (CellSizes)
+    {
+        free(CellSizes);
+    }
+    
+    if (Data)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            if (Data[Index])
+            {
+                free(Data[Index]);
+            }
+        }
+        free(Data);
+    }
+    
+    FreeConsole();
+    
     ReleaseDirectWrite(&DirectWriteState);
+    
     ReleaseBuffer(&ConstantBuffer);
+    
+    if (GridLines)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            ReleaseRenderable(&GridLines[Index]);
+        }
+        free(GridLines);
+    }
+    
+    if (ContourLines)
+    {
+        for (u32 Index = 0; Index < gDataCount; ++Index)
+        {
+            ReleaseRenderable(&ContourLines[Index]);
+        }
+        free(ContourLines);
+    }
+    
     ReleaseDirectXState(&DirectXState);
     
 #ifdef DEBUG
@@ -749,42 +1041,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         DebugInterface->Release();
     }
 #endif
-    
-    if (GridLines)
-    {
-        for (u32 Index = 0; Index < gDataCount; ++Index)
-        {
-            ReleaseRenderable(&GridLines[Index]);
-        }
-        free(GridLines);
-    }
-    
-    
-    if (ContourLines)
-    {
-        for (u32 Index = 0; Index < gDataCount; ++Index)
-        {
-            ReleaseRenderable(&ContourLines[Index]);
-        }
-        free(ContourLines);
-    }
-    
-    if (Data)
-    {
-        for (u32 Index = 0; Index < gDataCount; ++Index)
-        {
-            if (Data[Index])  free(Data[Index]);
-        }
-    }
-    
-    free(Data);
-    
-    if (DataSize)            free(DataSize);
-    if (CellSizes)           free(CellSizes);
-    if (CompareVertexCount)  free(CompareVertexCount);
-    if (CompareIndexCount)   free(CompareIndexCount);
-    
-    FreeConsole();
     
     return msg.wParam;
 }

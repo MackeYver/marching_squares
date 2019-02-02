@@ -1,6 +1,7 @@
 #Directories
 temp/
 build/
+perf/
 
 #Files
 

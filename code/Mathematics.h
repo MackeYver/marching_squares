@@ -32,28 +32,8 @@
 #ifndef Mathematics_h
 #define Mathematics_h
 
-#include <stdint.h>
+#include "Types.h"
 #include <math.h>
-#include <float.h>
-
-
-//
-// Typedefs
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t   s8;
-typedef int32_t  s32;
-typedef int64_t  s64;
-
-#define f32Max FLT_MAX
-#define f32Min FLT_MIN
-typedef float f32;
-
-typedef u32 b32;
-
 
 #define Pi32    3.141592653589793
 #define Pi32_2  1.570796326794897

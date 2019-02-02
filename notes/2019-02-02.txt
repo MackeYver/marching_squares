@@ -1,0 +1,24 @@
+Goal of today:
+1. Improve the structure of the measurement
+2. Implement the c style version of the algorithm
+
+
+
+## Sidequest 1: Bugs
+------------------
+Well, turns out that some of the DirectX objects were note released in the correct order, 
+which caused it to throw some exceptions... Fixed now! (D'oh!)
+
+Also related, the bug reported in note 2019-01-20.txt: turns out that I were releasing the 
+RenderTargetView twice for some reason, so the undeflow of the refcount was on the 
+renderview not on the swap chain. (D'oh #2!)
+
+Since I almost always closed the program via Visual Studio, the DirectX clean-up code never
+ran... (D'oh #3!).
+
+
+
+## 1. Improve the structure of the measurements
+---------------------------------------------
+A total re-design of the testing structure. Now it will output the data into text files and
+I'll try to make into a sensible csv format which I can easily analyse in a spreadsheet.
