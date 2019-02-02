@@ -1,24 +1,26 @@
 Goal of today:
-1. Improve the structure of the measurement
-2. Implement the c style version of the algorithm
+1. Implement the c style version of the algorithm (continuing from previous days)
 
 
 
 ## Sidequest 1: Bugs
 ------------------
-Well, turns out that some of the DirectX objects were not released in the correct order,
-which caused it to throw some exceptions... Fixed now! (D'oh!)
+I change the build.bat in order to also build a fast debug build, or rather, compile the 
+code with optimization O2 but also with some debug options (/Zi). This caused the program
+to always hit a breakpoint or throw an exception in random code at exit. I checked all my
+code, in particular the DirectX cleanup but all seemed fine. I made sure that every object
+was properly released -- in a correct order -- but that didn't help at all.
+  Then I realised that I did use debugging features from DirectX. Perhaps some of the debug
+code in the DirectX libraries changed/compiled out when I compiled with O2? If I removed
+the DDEBUG as a build options (effectually removing the use of the DirectX debug features)
+it exited without any arbitrary errors. Fixed!
+  Hypothesis: 
+    - debug features of DirectX will be compiled out if compiled as a non-optimized build.
 
-Also related, the bug reported in note 2019-01-20.txt: turns out that I were releasing the
-RenderTargetView twice for some reason, so the underflow of the refcount was on the
-renderview not on the swap chain. (D'oh #2!)
-
-Since I almost always closed the program via Visual Studio, the DirectX clean-up code never
-ran... (D'oh #3!).
 
 
-
-## 1. Improve the structure of the measurements
----------------------------------------------
-A total redesign of the testing structure. Now it will output the data into text files and
-I'll try to make into a sensible csv format which I can easily analyse in a spreadsheet.
+## 1. Implement the c style version of the algorithm
+--------------------------------------------------
+I have cheated a bit and opted to use Sean Barrett's stretchy buffer implementation. I could
+implement it myself but that will have to wait for later. The same will be true for the
+implementation of a hash-table.
