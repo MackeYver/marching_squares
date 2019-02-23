@@ -3,8 +3,8 @@ Goal of today:
 
 
 
-## Sidequest 1: Bugs
-------------------
+## Sidequest 1: Bug
+-----------------
 I change the build.bat in order to also build a fast debug build, or rather, compile the 
 code with optimization O2 but also with some debug options (/Zi). This caused the program
 to always hit a breakpoint or throw an exception in random code at exit. I checked all my
@@ -16,6 +16,27 @@ the DDEBUG as a build options (effectually removing the use of the DirectX debug
 it exited without any arbitrary errors. Fixed!
   Hypothesis: 
     - debug features of DirectX will be compiled out if compiled as a non-optimized build.
+
+
+
+## Sidequest 2: A small optimization
+----------------------------------
+I suddenly remembered that I did something a bit sloppy in the GetLineChain function, well I
+did a lot of sloppy things I guess, bit one in particular: I insert elements at the start of
+a vector many, many times. This is surely very slow. The measurements tells me that of the 
+time spent in the "Simplify" part of the algorithm, 76% is spent in GetLineChain, or roughly
+22 microseconds. What will happen if I change that? Let's try to make a small and simple 
+change to how we add elements.
+  Method:
+  - We'll add the "forward" elements into one vector and the "backward" elements into another
+  - The "backward" elements will be added in the wrong order, so we'll use std::reverse 
+  - Merge the two vectors into one and return that
+
+Well, it actually turns out that
+  a) std::reverse is slow, iterating through the elements backwards than adding to the new
+     concatenated vector is faster
+  b) this vs. the std::vector.insert() at the beginning is roughly equaly fast/slow!
+
 
 
 

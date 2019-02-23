@@ -22,6 +22,9 @@
 // SOFTWARE.
 //
 
+#ifndef std__h
+#define std__h
+
 #include "Mathematics.h"
 #include "Timing.h"
 
@@ -63,3 +66,5 @@ struct std_state
 };
 
 b32 MarchSquares(std_state *State, std::vector<f32> const& Heights);
+
+#endif

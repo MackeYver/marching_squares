@@ -29,8 +29,8 @@
 //
 
 
-#ifndef Mathematics_h
-#define Mathematics_h
+#ifndef Mathematics__h
+#define Mathematics__h
 
 #include "Types.h"
 #include <math.h>

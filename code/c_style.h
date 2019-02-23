@@ -22,18 +22,22 @@
 // SOFTWARE.
 //
 
-#ifndef c_style_h
-#define c_style_h
+#ifndef c_style__h
+#define c_style__h
 
 #include "Timing.h"
 #include "Mathematics.h"
+#include "v2_darray.h"
+#include "u16_darray.h"
+
+struct f32_darray;
+
+
 
 struct c_style_state
 {
-    v2  *Vertices; // Stretchy buffer
-    u16 *Indices;  // stretchy buffer
-    
-    u32 *DataPtr;
+    v2_darray Vertices;
+    u16_darray Indices;  
     
     //
     // @debug
@@ -63,6 +67,7 @@ struct c_style_state
 
 //
 // Note: Heights is a stretchy buffer!
-b32 MarchSquares(c_style_state *State, f32 const *Heights);
+b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Heights);
+void Free(c_style_state *State);
 
 #endif

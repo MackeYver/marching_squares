@@ -37,7 +37,7 @@
 #include "Mathematics.h"
 
 #define kIterations 1
-#define kTest 1
+#define kTest 2
 // 0 oop_std
 // 1 std
 // 2 c_style
@@ -47,7 +47,7 @@
 #elif kTest == 1
 #include "std.h"
 #elif kTest == 2
-#include "stretchy_buffer.h"
+#include "f32_darray.h"
 #include "c_style.h"
 #elif kTest > 2
 #error Invalid kTest value!
@@ -331,7 +331,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine, int nShowCmd) 
 {
     //
-    // Creata and attach console
+    // Create  and attach console
     //
     FILE *FileStdOut;
     assert(AllocConsole());
@@ -426,7 +426,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         "..\\data\\data_1000x1000.txt",
     };
     
-#if kTest < 2
+#if kTest == 2
+    f32_darray Heights[5];
+    
+    for (int i = 0; i < 5; ++i)
+    {
+        Init(&Heights[i], 20);
+    }
+    
+    for (int i = 0; i < 9; ++i)
+    {
+        Push(&Heights[0], 90.0f + (f32)(10*i));
+    }
+    
+    for (int i = 0; i < 9; ++i)
+    {
+        Push(&Heights[1], 20.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 8; ++i)
+    {
+        Push(&Heights[2], 20.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 17; ++i)
+    {
+        Push(&Heights[3], 40.0f + (f32)(20*i));
+    }
+    
+    for (int i = 0; i < 9; ++i)
+    {
+        Push(&Heights[4], (f32)i);
+    }
+    
+#else
+    
     std::vector<f32> Heights[] =
     {
         {90, 100, 110, 120, 130, 140, 150, 160, 170},
@@ -435,32 +469,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         {40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360},
         {2, 3, 4, 5, 6, 7, 8, 9, 10},// 11, 12, 13, 14},
     };
-#else
-    f32 *Heights[5];
-    for (int i = 0; i < 9; ++i)
-    {
-        sb_push(Heights[0], 90.0f + (f32)(10*i));
-    }
-    
-    for (int i = 0; i < 9; ++i)
-    {
-        sb_push(Heights[1], 20.0f + (f32)(20*i));
-    }
-    
-    for (int i = 0; i < 8; ++i)
-    {
-        sb_push(Heights[2], 20.0f + (f32)(20*i));
-    }
-    
-    for (int i = 0; i < 17; ++i)
-    {
-        sb_push(Heights[3], 40.0f + (f32)(20*i));
-    }
-    
-    for (int i = 0; i < 9; ++i)
-    {
-        sb_push(Heights[3], (f32)i);
-    }
     
 #endif
     
@@ -644,8 +652,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             fprintf(FilePerf, "O1;");
             fprintf(FileData, "O1;");
 #elif OPTIMIZATION == 2
-            fprintf(FilePerf, "O1;");
-            fprintf(FileData, "O1;");
+            fprintf(FilePerf, "O2;");
+            fprintf(FileData, "O2;");
 #endif
             fprintf(FilePerf, "%d;", Index);
             fprintf(FileData, "%d;", Index);
@@ -714,9 +722,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // - Generate lines from data using Marching Squares, non-OOP and not using standard library
     //
 #if kTest == 2
+    c_style_state State;
     {
-        c_style_state State;
-        
         LARGE_INTEGER Frequency;
         QueryPerformanceFrequency(&Frequency);
         
@@ -745,14 +752,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                 State.CellSize = CellSizes[Index];
                 State.CellCountX = CellCounts[2 * Index];
                 State.CellCountY = CellCounts[2 * Index + 1];
-                State.DataPtr = Data[Index];
                 f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(State.CellCountX - 1), 
                                        (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
                 State.CellSize = V2(SmallestSize, SmallestSize);
                 
                 ZeroMemory(State.Measures, 8*sizeof(time_measure));
                 
-                b32 Result = MarchSquares(&State, Heights[Index]);
+                b32 Result = MarchSquares(&State, Data[Index], &Heights[Index]);
                 assert(Result);
                 
                 for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
@@ -778,8 +784,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                     // Buffers, create them from this version (buffer creation not included in the 
                     // perfomance measurement).
                     Result = SetupBuffers(&DirectXState, 
-                                          State.Vertices, sb_count(State.Vertices), 
-                                          State.Indices, sb_count(State.Indices),
+                                          State.Vertices.Data, State.Vertices.Used, 
+                                          State.Indices.Data, State.Indices.Used,
                                           &ContourLines[Index]);
                     assert(Result);
                     
@@ -800,6 +806,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     fclose(FileData);
     fclose(FilePerf);
+    
+    
+#if kTest == 2
+    for (int i = 0; i < 5; ++i)
+    {
+        Free(&Heights[i]);
+    }
+    
+    Free(&State);
+#endif
     
     
     

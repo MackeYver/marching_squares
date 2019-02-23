@@ -22,6 +22,9 @@
 // SOFTWARE.
 //
 
+#ifndef Types__h
+#define Types__h
+
 #include <stdint.h>
 #include <float.h>
 
@@ -42,3 +45,5 @@ typedef int64_t  s64;
 typedef float f32;
 
 typedef u32 b32;
+
+#endif

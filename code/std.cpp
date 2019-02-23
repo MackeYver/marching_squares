@@ -24,9 +24,8 @@
 
 #include "std.h"
 
-#include <assert.h>
 #include <map>
-
+#include <assert.h>
 
 
 //
@@ -37,6 +36,12 @@ struct line_segment {
     b32 IsProcessed;
 };
 
+struct line_point
+{
+    v2 P;
+    u32 LineIndex;
+};
+
 line_segment LineSegment(v2 P0, v2 P1)
 {
     line_segment Result;
@@ -45,12 +50,6 @@ line_segment LineSegment(v2 P0, v2 P1)
     Result.IsProcessed = false;
     return Result;
 }
-
-struct line_point
-{
-    v2 P;
-    u32 LineIndex;
-};
 
 
 
@@ -158,9 +157,11 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     //
     // "Forward in the chain"
     // Check in direction of P[1]
+    std::vector<line_segment> Forward;
     while (Line && !Line->IsProcessed)
     {
-        Chain.push_back(*Line);
+        //Chain.push_back(*Line);
+        Forward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
@@ -171,16 +172,39 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
     // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
-    Line = &Chain[0];
+    //Line = &Chain[0];
+    Line = &Forward[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     
+    std::vector<line_segment> Backward;
     while (Line && !Line->IsProcessed)
     {
-        Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
+        //Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
+        Backward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
+    
+    Chain.reserve(Forward.size() + Backward.size());
+    
+#if 0
+    std::reverse(Backward.begin(), Backward.end());
+    std::copy(Backward.begin(), Backward.end(), back_inserter(Chain));
+    std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
+#else
+    std::vector<line_segment>::size_type Size = Backward.size();
+    if (Size > 0)
+    {
+        for (std::vector<line_segment>::size_type Index = Size - 1;
+             Index >= 0;
+             --Index)
+        {
+            Chain.push_back(Backward[Index]);
+        }
+    }
+    std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
+#endif
 }
 
 
@@ -207,6 +231,12 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
     
     std::vector<line_segment> LineSegments;
     std::map<u32, std::vector<line_point> > LinePoints;
+    
+    
+    // @debug
+    static u32 CurrChainSizeMax = 0;
+    static u32 LineSegmentsSizeMax = 0;
+    static u32 LinePointsSizeMax = 0;
     
     
     //
@@ -285,6 +315,8 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
         }
         StopMeasure(&State->TMarching);
         
+        LineSegmentsSizeMax = LineSegments.size() > LineSegmentsSizeMax ? LineSegments.size() : LineSegmentsSizeMax;
+        
         if (LineSegments.size() > 0)
         {
             StartMeasure(&State->TSimplify);
@@ -301,8 +333,12 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                 GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
                 StopMeasure(&State->TGetLineChain);
                 
+                // @debug
+                std::vector<line_segment>::size_type CurrChainSize = CurrChain.size();
+                CurrChainSizeMax = CurrChainSize > CurrChainSizeMax ? CurrChainSize :  CurrChainSizeMax;
+                
                 for (std::vector<line_segment>::size_type LineIndex = 0;
-                     LineIndex < CurrChain.size();
+                     LineIndex < CurrChainSize;
                      ++LineIndex)
                 {
                     StartMeasure(&State->TMergeLines);
@@ -318,7 +354,7 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                     // "Vertex melding", if the slopes of two consecutive lines are
                     // the same (or close enough), then we skip adding the vertices
                     // of this line and focus on the next one
-                    if (LineIndex > 0 && LineIndex < CurrChain.size() - 1 &&
+                    if (LineIndex > 0 && LineIndex < CurrChainSize - 1 &&
                         AlmostEqualRelative(PrevSlope, CurrSlope))
                     {
                         continue;
@@ -342,6 +378,8 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
     }
     StopMeasure(&State->TTotal);
     
+    printf("CurrChainSizeMax = %d\n",  CurrChainSizeMax);
+    printf("LineSegmentsSizeMax = %d\n", LineSegmentsSizeMax);
     
     return true;
 }

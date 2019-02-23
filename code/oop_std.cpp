@@ -216,14 +216,17 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
 {
     Chain.clear();
     
+    typedef MarchingSquares::line_segment line_segment;
     MarchingSquares::line_segment *Line = &LineInChain;
     
     //
     // "Forward in the chain"
     // Check in direction of P[1]
+    std::vector<line_segment> Forward;
     while (Line && !Line->IsProcessed)
     {
-        Chain.push_back(*Line);
+        //Chain.push_back(*Line);
+        Forward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
@@ -234,16 +237,38 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
     // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
-    Line = &Chain[0];
+    //Line = &Chain[0];
+    Line = &Forward[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
-    
+    std::vector<line_segment> Backward;
     while (Line && !Line->IsProcessed)
     {
-        Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
+        //Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
+        Backward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
+    
+    Chain.reserve(Forward.size() + Backward.size());
+    
+#if 0
+    std::reverse(Backward.begin(), Backward.end());
+    std::copy(Backward.begin(), Backward.end(), back_inserter(Chain));
+    std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
+#else
+    std::vector<line_segment>::size_type Size = Backward.size();
+    if (Size > 0)
+    {
+        for (std::vector<line_segment>::size_type Index = Size - 1;
+             Index >= 0;
+             --Index)
+        {
+            Chain.push_back(Backward[Index]);
+        }
+    }
+    std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
+#endif
 }
 
 

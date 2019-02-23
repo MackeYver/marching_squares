@@ -46,6 +46,7 @@ IF  %BuildMode%=="debug" (
   SET CompilerOptions=/Gs9999999 /DDEBUG=1 /DWIN32=1 /DOPTIMIZATION=0 !CompilerOptions!
 )
 
+
 REM WL		 One line diagonostics
 REM Ox		 Code generation x E [d = Debug, 1 = small code, 2 = fast code]
 REM fp:fast    Fast floating point code generated

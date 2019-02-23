@@ -28,8 +28,8 @@
 
 
 
-#ifndef Marching_squares_h
-#define Marching_squares_h
+#ifndef oop_std__h
+#define oop_std__h
 
 #include <map>
 #include <vector>
@@ -155,4 +155,5 @@ class MarchingSquares {
     u32 CellCountX = 0;
     u32 CellCountY = 0;
 };
-#endif /* Marching_squares_h */
+
+#endif
