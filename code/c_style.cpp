@@ -67,12 +67,12 @@ inline void Add(line_segment_darray *LineSegments,
     LP.P = P0;
     LP.LineIndex = Index;
     u32 Key = CalculateKey(LP.P);
-    Insert(Points, Key, &LP);
+    line_point_darray *DArray = Insert(Points, Key, &LP);
     
     LP.P = P1;
     LP.LineIndex = Index;
     Key = CalculateKey(LP.P);
-    Insert(Points, Key, &LP);
+    DArray = Insert(Points, Key, &LP);
 }
 
 
@@ -150,9 +150,11 @@ void GetLineChain(line_segment_darray *LineSegments,
     //
     // "Forward in the chain"
     // Check in direction of P[1]
+    line_segment_darray Forwards;
+    Init(&Forwards, 100);
     while (Line && !Line->IsProcessed)
     {
-        Push(Chain, Line);
+        Push(&Forwards, Line);
         
         Line->IsProcessed = true;
         Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
@@ -162,15 +164,40 @@ void GetLineChain(line_segment_darray *LineSegments,
     //
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
-    // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
-    Line = &Chain->Data[0];
+    // - this is the slow and stupid version, we'll look at perfomance as soon as it's working
+    line_segment_darray Backwards;
+    Init(&Backwards, 100);
+    
+    Line = &Forwards.Data[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     
     while (Line && !Line->IsProcessed)
     {
+        Push(&Backwards, Line);
+        
         Line->IsProcessed = true;
-        Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
+        Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
+    
+    u32 TotalSize = (Forwards.Used + Backwards.Used);
+    s32 Diff = TotalSize - Chain->Capacity;
+    if (Diff > 0)
+    {
+        Grow(Chain, Diff);
+    }
+    
+    for (s32 Index = Backwards.Used - 1; Index >= 0; --Index)
+    {
+        Push(Chain, &Backwards.Data[Index]);
+    }
+    
+    for (u32 Index = 0; Index < Forwards.Used; ++Index)
+    {
+        Push(Chain, &Forwards.Data[Index]);
+    }
+    
+    Free(&Forwards);
+    Free(&Backwards);
 }
 
 

@@ -65,6 +65,7 @@ struct line_segment_darray
 static void Init(line_segment_darray *Array, u32 Capacity);
 static void Push(line_segment_darray *Array, line_segment *LineSegment);
 static void Push(line_segment_darray *Array, v2 P0, v2 P1);
+static void Grow(line_segment_darray *Array, u32 Size = 0);
 static void Clear(line_segment_darray *Array);
 static void Free(line_segment_darray *Array);
 
@@ -90,12 +91,18 @@ static void Init(line_segment_darray *Array, u32 Capacity)
 }
 
 
-static void Grow(line_segment_darray *Array)
+static void Grow(line_segment_darray *Array, u32 Size)
 {
     assert(Array);
     assert(Array->Data);
     
     u32 NewCapacity = Array->Capacity == 0 ? 1 : 2*Array->Capacity;
+    
+    if (Size > 0)
+    {
+        NewCapacity = Array->Capacity + Size;
+    }
+    
     line_segment *NewPtr = (line_segment *)realloc(Array->Data, NewCapacity * sizeof(line_segment));
     
     if (NewPtr)

@@ -138,7 +138,6 @@ line_segment *GetNextLineSegment(std::vector<line_segment>& LineSegments,
     std::vector<line_point> *Points = &LinePoints[Key];
     for (auto& Point : *Points)
     {
-        assert(Point.LineIndex >= 0);
         assert(Point.LineIndex < LineSegments.size());
         
         line_segment *NextLine = &LineSegments[Point.LineIndex];

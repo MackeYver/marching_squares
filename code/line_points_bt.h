@@ -67,18 +67,18 @@ static line_point_darray *Insert(line_points_bt **Node, u32 Key, line_point *Dat
         
         return &(*Node)->Data;
     }
-    else if ((*Node)->Key == Key)
+    else if (Key == (*Node)->Key)
     {
         Push(&(*Node)->Data, Data);
         return &(*Node)->Data;
     }
-    else if((*Node)->Key < Key)
+    else if(Key < (*Node)->Key)
     {
-        return Insert(&(*Node)->Right, Key, Data);
+        return Insert(&(*Node)->Left, Key, Data);
     }
     else
     {
-        return Insert(&(*Node)->Left, Key, Data);
+        return Insert(&(*Node)->Right, Key, Data);
     }
 }
 
@@ -89,11 +89,11 @@ static line_point_darray *Find(line_points_bt *Node, u32 Key)
     {
         return nullptr;
     }
-    else if (Node->Key == Key)
+    else if (Key == Node->Key)
     {
         return &Node->Data;
     }
-    else if(Node->Key < Key)
+    else if(Key < Node->Key)
     {
         return Find(Node->Left, Key);
     }
@@ -114,6 +114,7 @@ static void Free(line_points_bt **Node)
     Free(&(*Node)->Left);
     Free(&(*Node)->Right);
     
+    Free(&(*Node)->Data);
     free(*Node);
     *Node = nullptr;
 }

@@ -220,19 +220,11 @@ b32 SetupBuffers(directx_state *State,
 {
     //
     // Contour lines
-#if kTest < 322
     b32 Result = CreateRenderable(State,
                                   ContourLines,
                                   VertexDataPtr, sizeof(v2) , VertexCount,
                                   IndexDataPtr , sizeof(u16), IndexCount,
                                   D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
-#else
-    b32 Result = CreateRenderable(State,
-                                  ContourLines,
-                                  VertexDataPtr, sizeof(v2) , VertexCount,
-                                  IndexDataPtr , sizeof(u16), IndexCount,
-                                  D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
-#endif
     
     return Result;
 }
