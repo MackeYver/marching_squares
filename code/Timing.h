@@ -27,6 +27,13 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdio.h>
+
+#ifdef DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
 
 #include "Types.h"
 
@@ -37,12 +44,12 @@ struct time_measure
     u32 Count;
 };
 
-inline void StartMeasure(time_measure *Measure)
+static void StartMeasure(time_measure *Measure)
 {
     QueryPerformanceCounter(&Measure->StartTime);
 }
 
-inline void StopMeasure(time_measure *Measure)
+static void StopMeasure(time_measure *Measure)
 {
     LARGE_INTEGER EndTime;
     QueryPerformanceCounter(&EndTime);
@@ -51,10 +58,147 @@ inline void StopMeasure(time_measure *Measure)
     ++Measure->Count;
 }
 
-inline void ConvertToMicroSeconds(time_measure *Measure, LARGE_INTEGER *Frequency)
+static void ConvertToMicroSeconds(time_measure *Measure, LARGE_INTEGER *Frequency)
 {
     Measure->TotalTime.QuadPart *= 1000000;
     Measure->TotalTime.QuadPart /= Frequency->QuadPart;
 }
+
+
+union time_measurements
+{
+    struct
+    {
+        //time_measure TTotal;
+        
+        //time_measure TMarching;
+        time_measure TBinarySum;
+        time_measure TLerp;
+        time_measure TAdd;
+        
+        //time_measure TSimplify;
+        time_measure TGetLineChain;
+        time_measure TMergeLines;
+    };
+    
+    //time_measure Array[8]; 
+    time_measure Array[5]; 
+};
+
+static char const *TimingNames[] =
+{
+    //"Total",
+    
+    //"Marching",
+    "BinarySum",
+    "Lerp",
+    "Add",
+    
+    //"Simplify",
+    "GetLineChain",
+    "MergeLines"
+};
+
+static char const *TimingParentNames[] =
+{
+    //"Total",
+    
+    //"Marching",
+    "Marching",
+    "Marching",
+    "Marching",
+    
+    //"Simplify",
+    "Simplify",
+    "Simplify",
+};
+
+static void ClearTimeMeasurements(time_measurements *M)
+{
+    ZeroMemory(M, sizeof(time_measurements));
+}
+
+
+static void CreateFile(FILE **File, char const *PathAndName)
+{
+    assert(File);
+    //int ErrorCode = fopen_s(&FilePerf, "..\\perf\\perf.txt", "w");
+    int ErrorCode = fopen_s(&(*File), PathAndName, "w");
+    assert(!ErrorCode);
+    ErrorCode;
+}
+
+static void WritePerfHeadersToFile(FILE **File)
+{
+    assert(File);
+    assert(*File);
+    
+    fprintf(*File, "Version;Optimization;Case#;Iteration#;ParentMeasure;Measure;Time;Count\n");
+}
+
+static void WritePerfToFile(FILE *File, char const *Version, u32 Optimization, u32 CaseID, u32 IterationNo,
+                            char const *ParentName, char const *Name, u64 Time, u32 Count)
+{
+    fprintf(File, Version);
+    fprintf(File, ";");
+    if (Optimization == 0)
+    {
+        fprintf(File, "Od;");
+    }
+    else if (Optimization == 1)
+    {
+        fprintf(File, "O1;");
+    }
+    else if (Optimization == 2)
+    {
+        fprintf(File, "O2;");
+    }
+    
+    fprintf(File, "%u;", CaseID);
+    fprintf(File, "%u;", IterationNo);
+    
+    fprintf(File, "%s;", ParentName);
+    fprintf(File, "%s;", Name);
+    fprintf(File, "%llu;", Time);
+    fprintf(File, "%u", Count);
+    fprintf(File, "\n");
+}
+
+
+static void WriteDataHeadersToFile(FILE **File)
+{
+    assert(File);
+    assert(*File);
+    
+    fprintf(*File, "Version;Optimization;Case#;Iteration#;VertexCountAnte;VertexCountPost\n");
+}
+
+static void WriteDataToFile(FILE *File, char const *Version, u32 Optimization, u32 CaseID, u32 IterationNo,
+                            u32 VertexCountAnte, u32 VertexCountPost)
+{
+    fprintf(File, Version);
+    fprintf(File, ";");
+    if (Optimization == 0)
+    {
+        fprintf(File, "Od;");
+    }
+    else if (Optimization == 1)
+    {
+        fprintf(File, "O1;");
+    }
+    else if (Optimization == 2)
+    {
+        fprintf(File, "O2;");
+    }
+    
+    fprintf(File, "%u;", CaseID);
+    fprintf(File, "%u;", IterationNo);
+    
+    fprintf(File, "%u;", VertexCountAnte);
+    fprintf(File, "%u", VertexCountPost);
+    fprintf(File, "\n");
+}
+
+
 
 #endif

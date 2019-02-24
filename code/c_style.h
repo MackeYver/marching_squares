@@ -39,26 +39,8 @@ struct c_style_state
     v2_darray Vertices;
     u16_darray Indices;  
     
-    //
-    // @debug
-    union
-    {
-        struct
-        {
-            time_measure TTotal;
-            
-            time_measure TMarching;
-            time_measure TBinarySum;
-            time_measure TLerp;
-            time_measure TAdd;
-            
-            time_measure TSimplify;
-            time_measure TGetLineChain;
-            time_measure TMergeLines;
-        };
-        
-        time_measure Measures[8]; 
-    };
+    time_measurements Measures;
+    u32 LineCountAnte;
     
     u32 CellCountX = 0;
     u32 CellCountY = 0;

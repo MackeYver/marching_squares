@@ -25,6 +25,12 @@
 #ifndef line_segment_darray__h
 #define line_segment_darray__h
 
+#ifdef DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
+
 
 
 //

@@ -25,7 +25,12 @@
 #include "std.h"
 
 #include <map>
+
+#ifdef DEBUG
 #include <assert.h>
+#else
+#define assert(x)
+#endif
 
 
 //
@@ -125,9 +130,12 @@ line_segment *GetNextLineSegment(std::vector<line_segment>& LineSegments,
     
     u32 Count = LinePoints.count(Key);
     assert(Count > 0); // There will always exist at least one point that generates this key
+    if (Count == 0)
+    {
+        return nullptr;
+    }
     
     std::vector<line_point> *Points = &LinePoints[Key];
-    assert(Points->size() != 0); // There will always exist at least one point that generates this key
     for (auto& Point : *Points)
     {
         assert(Point.LineIndex >= 0);
@@ -160,7 +168,6 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     std::vector<line_segment> Forward;
     while (Line && !Line->IsProcessed)
     {
-        //Chain.push_back(*Line);
         Forward.push_back(*Line);
         
         Line->IsProcessed = true;
@@ -172,14 +179,12 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
     // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
-    //Line = &Chain[0];
     Line = &Forward[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     
     std::vector<line_segment> Backward;
     while (Line && !Line->IsProcessed)
     {
-        //Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
         Backward.push_back(*Line);
         
         Line->IsProcessed = true;
@@ -215,6 +220,7 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
 b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
 {
     assert(State);
+    
     if (State->CellCountX == 0)  return false;
     if (State->CellCountY == 0)  return false;
     if (AlmostEqualRelative(State->CellSize, v2_zero))  return false;
@@ -232,16 +238,11 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
     std::vector<line_segment> LineSegments;
     std::map<u32, std::vector<line_point> > LinePoints;
     
-    
-    // @debug
-    static u32 CurrChainSizeMax = 0;
-    static u32 LineSegmentsSizeMax = 0;
-    static u32 LinePointsSizeMax = 0;
+    State->LineCountAnte = 0;
     
     
     //
     // Iterate through all the heights
-    StartMeasure(&State->TTotal);
     for (auto& CurrHeight : LevelHeights) {
         LineSegments.clear();
         LinePoints.clear();
@@ -251,10 +252,9 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
         
         //
         // March the Squares!
-        StartMeasure(&State->TMarching);
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&State->TBinarySum);
+                StartMeasure(&State->Measures.TBinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -271,21 +271,21 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&State->TBinarySum);
+                StopMeasure(&State->Measures.TBinarySum);
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&State->TLerp);
+                StartMeasure(&State->Measures.TLerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&State->TLerp);
+                StopMeasure(&State->Measures.TLerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&State->TAdd);
+                StartMeasure(&State->Measures.TAdd);
                 switch (Sum) {
                     case 1: Add(LineSegments, LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(LineSegments, LinePoints, P, Bottom, Right);   break;
@@ -310,17 +310,14 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                     case 13: Add(LineSegments, LinePoints, P, Right , Bottom); break;
                     case 14: Add(LineSegments, LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&State->TAdd);
+                StopMeasure(&State->Measures.TAdd);
             }
         }
-        StopMeasure(&State->TMarching);
         
-        LineSegmentsSizeMax = LineSegments.size() > LineSegmentsSizeMax ? LineSegments.size() : LineSegmentsSizeMax;
+        State->LineCountAnte += LineSegments.size();
         
         if (LineSegments.size() > 0)
         {
-            StartMeasure(&State->TSimplify);
-            
             f32 PrevSlope;
             f32 CurrSlope = 0.0f;
             
@@ -329,19 +326,16 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                 if (CurrLine.IsProcessed)  continue;
                 
                 std::vector<line_segment> CurrChain;
-                StartMeasure(&State->TGetLineChain);
+                StartMeasure(&State->Measures.TGetLineChain);
                 GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
-                StopMeasure(&State->TGetLineChain);
+                StopMeasure(&State->Measures.TGetLineChain);
                 
-                // @debug
                 std::vector<line_segment>::size_type CurrChainSize = CurrChain.size();
-                CurrChainSizeMax = CurrChainSize > CurrChainSizeMax ? CurrChainSize :  CurrChainSizeMax;
-                
                 for (std::vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChainSize;
                      ++LineIndex)
                 {
-                    StartMeasure(&State->TMergeLines);
+                    StartMeasure(&State->Measures.TMergeLines);
                     
                     line_segment *Line = &CurrChain[LineIndex];
                     
@@ -370,16 +364,12 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                         
                         Indices->push_back((u16)0xFFFF);
                     }
-                    StopMeasure(&State->TMergeLines);
+                    StopMeasure(&State->Measures.TMergeLines);
                 }
             }
-            StopMeasure(&State->TSimplify);
         }
     }
-    StopMeasure(&State->TTotal);
     
-    printf("CurrChainSizeMax = %d\n",  CurrChainSizeMax);
-    printf("LineSegmentsSizeMax = %d\n", LineSegmentsSizeMax);
     
     return true;
 }

@@ -32,7 +32,7 @@ SET GeneralCompilerOptions=/nologo /WL /fp:fast /fp:except- /EHsc /Gm- /Oi /FC /
 
 IF %BuildMode%=="release" (
   ECHO Release mode
-  SET CompilerOptions=/O2 !GeneralCompilerOptions!
+  SET CompilerOptions=/Od !GeneralCompilerOptions!
   SET CompilerOptions=/Gs9999999 /DRELEASE=1 /DWIN32=1 /DOPTIMIZATION=2 !CompilerOptions!
 ) 
 IF %BuildMode%=="fastdebug" (

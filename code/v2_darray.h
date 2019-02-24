@@ -26,8 +26,13 @@
 #define v2_darray__h
 
 #include <stdlib.h>
-#include <assert.h>
 #include "Types.h"
+
+#ifdef DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
 
 
 

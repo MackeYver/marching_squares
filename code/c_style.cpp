@@ -30,7 +30,11 @@
 #include "v2_darray.h"
 #include "line_points_bt.h"
 
+#ifdef DEBUG
 #include <assert.h>
+#else
+#define assert(x)
+#endif
 
 
 
@@ -64,13 +68,11 @@ inline void Add(line_segment_darray *LineSegments,
     LP.LineIndex = Index;
     u32 Key = CalculateKey(LP.P);
     Insert(Points, Key, &LP);
-    //Points[Key].push_back(LP);
     
     LP.P = P1;
     LP.LineIndex = Index;
     Key = CalculateKey(LP.P);
     Insert(Points, Key, &LP);
-    //Points[Key].push_back(LP);
 }
 
 
@@ -166,9 +168,6 @@ void GetLineChain(line_segment_darray *LineSegments,
     
     while (Line && !Line->IsProcessed)
     {
-        //Chain.insert(Chain.begin(), *Line); // SLOOOOOOOOW!
-        
-        
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
@@ -207,10 +206,11 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
     
     line_points_bt *LinePoints = nullptr;
     
+    State->LineCountAnte = 0;
+    
     
     //
     // Iterate through all the heights
-    StartMeasure(&State->TTotal);
     for (u32 HeightIndex = 0; HeightIndex < Heights->Used; ++HeightIndex) {
         f32 CurrHeight = Heights->Data[HeightIndex];
         
@@ -222,10 +222,9 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
         
         //
         // March the Squares!
-        StartMeasure(&State->TMarching);
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&State->TBinarySum);
+                StartMeasure(&State->Measures.TBinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -242,21 +241,21 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&State->TBinarySum);
+                StopMeasure(&State->Measures.TBinarySum);
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&State->TLerp);
+                StartMeasure(&State->Measures.TLerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&State->TLerp);
+                StopMeasure(&State->Measures.TLerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&State->TAdd);
+                StartMeasure(&State->Measures.TAdd);
                 switch (Sum) {
                     case 1: Add(&LineSegments, &LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(&LineSegments, &LinePoints, P, Bottom, Right);   break;
@@ -281,16 +280,15 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                     case 13: Add(&LineSegments, &LinePoints, P, Right , Bottom); break;
                     case 14: Add(&LineSegments, &LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&State->TAdd);
+                StopMeasure(&State->Measures.TAdd);
             }
         }
-        StopMeasure(&State->TMarching);
         
         u32 LineSegmentsCount = LineSegments.Used;
+        State->LineCountAnte += LineSegmentsCount;
+        
         if (LineSegmentsCount > 0)
         {
-            StartMeasure(&State->TSimplify);
-            
             f32 PrevSlope;
             f32 CurrSlope = 0.0f;
             
@@ -299,18 +297,14 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                 line_segment *CurrLine = &LineSegments.Data[LineSegmentIndex];
                 if (CurrLine->IsProcessed)  continue;
                 
-                StartMeasure(&State->TGetLineChain);
+                StartMeasure(&State->Measures.TGetLineChain);
                 GetLineChain(&LineSegments, LinePoints, CurrLine, &CurrChain);
-                StopMeasure(&State->TGetLineChain);
+                StopMeasure(&State->Measures.TGetLineChain);
                 
-                /*
-                for (std::vector<line_segment>::size_type LineIndex = 0;
-                     LineIndex < CurrChain.size();
-                     ++LineIndex)*/
                 u32 CurrChainCount = CurrChain.Used;
                 for (u32 LineChainIndex = 0; LineChainIndex < CurrChainCount; ++LineChainIndex) 
                 {
-                    StartMeasure(&State->TMergeLines);
+                    StartMeasure(&State->Measures.TMergeLines);
                     
                     line_segment *Line = &CurrChain.Data[LineChainIndex];
                     
@@ -339,13 +333,11 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                         
                         Push(Indices, (u16)0xFFFF);
                     }
-                    StopMeasure(&State->TMergeLines);
+                    StopMeasure(&State->Measures.TMergeLines);
                 }
             }
-            StopMeasure(&State->TSimplify);
         }
     }
-    StopMeasure(&State->TTotal);
     
     
     //

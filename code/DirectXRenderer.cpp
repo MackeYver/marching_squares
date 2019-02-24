@@ -34,7 +34,7 @@
 #ifdef DEBUG
 #include <assert.h>
 #else
-#define assert(x)
+#define assert
 #endif
 
 #include <stdio.h>
@@ -832,6 +832,7 @@ b32 InitDirectWrite(directx_state *DirectXState, directwrite_state *State)
 void ReleaseDirectWrite(directwrite_state *State)
 {
     assert(State);
+    
     State->TextFormat ? State->TextFormat->Release() : 0;
     State->Brush ? State->Brush->Release() : 0;
     State->RenderTarget ? State->RenderTarget->Release() : 0;
@@ -844,6 +845,7 @@ void ReleaseDirectWrite(directwrite_state *State)
 void BeginDraw(directwrite_state *State)
 {
     assert(State && State->DeviceContext);
+    
     State->DeviceContext->BeginDraw();
 }
 
@@ -851,6 +853,7 @@ void BeginDraw(directwrite_state *State)
 HRESULT EndDraw(directwrite_state *State)
 {
     assert(State && State->DeviceContext);
+    
     HRESULT Result = State->DeviceContext->EndDraw();
     
     return Result;

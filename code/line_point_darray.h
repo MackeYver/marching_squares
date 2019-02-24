@@ -26,8 +26,13 @@
 #define line_point_darray__h
 
 #include "Mathematics.h"
-#include <assert.h>
 #include <stdlib.h>
+
+#ifdef DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
 
 
 

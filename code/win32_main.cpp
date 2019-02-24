@@ -28,11 +28,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include "DirectXRenderer.h"
-
-#include <assert.h>
+#include <stdio.h>
 #include <cctype>
 
+#include "DirectXRenderer.h"
 #include "Types.h"
 #include "Mathematics.h"
 
@@ -55,11 +54,13 @@
 
 
 #ifdef DEBUG
-#include <stdio.h>
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
+#include <assert.h>
 #else
 #define DebugPrint(...)
+#define assert(x)
 #endif
+
 
 
 //
@@ -219,11 +220,20 @@ b32 SetupBuffers(directx_state *State,
 {
     //
     // Contour lines
+#if kTest < 322
     b32 Result = CreateRenderable(State,
                                   ContourLines,
                                   VertexDataPtr, sizeof(v2) , VertexCount,
                                   IndexDataPtr , sizeof(u16), IndexCount,
                                   D3D10_PRIMITIVE_TOPOLOGY_LINESTRIP);
+#else
+    b32 Result = CreateRenderable(State,
+                                  ContourLines,
+                                  VertexDataPtr, sizeof(v2) , VertexCount,
+                                  IndexDataPtr , sizeof(u16), IndexCount,
+                                  D3D10_PRIMITIVE_TOPOLOGY_LINELIST);
+#endif
+    
     return Result;
 }
 
@@ -261,6 +271,7 @@ b32 SetupGridLines(directx_state *State,
     
     return true;
 }
+
 
 
 
@@ -331,11 +342,15 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine, int nShowCmd) 
 {
     //
-    // Create  and attach console
+    // Create and attach console
     //
-    FILE *FileStdOut;
-    assert(AllocConsole());
-    freopen_s(&FileStdOut, "CONOUT$", "w", stdout);
+    {
+        FILE *FileStdOut;
+        b32 Result = AllocConsole();
+        assert(Result);
+        freopen_s(&FileStdOut, "CONOUT$", "w", stdout);
+        Result;
+    }
     
     
     // TODO(Marcus): Handle resolution in a proper way
@@ -439,12 +454,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Push(&Heights[0], 90.0f + (f32)(10*i));
     }
     
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 8; ++i)
     {
         Push(&Heights[1], 20.0f + (f32)(20*i));
     }
     
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 7; ++i)
     {
         Push(&Heights[2], 20.0f + (f32)(20*i));
     }
@@ -454,13 +469,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         Push(&Heights[3], 40.0f + (f32)(20*i));
     }
     
+    
     for (int i = 0; i < 9; ++i)
     {
-        Push(&Heights[4], (f32)i);
+        Push(&Heights[4], (f32)i + 2);
     }
     
-#else
     
+#else
     std::vector<f32> Heights[] =
     {
         {90, 100, 110, 120, 130, 140, 150, 160, 170},
@@ -469,7 +485,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         {40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360},
         {2, 3, 4, 5, 6, 7, 8, 9, 10},// 11, 12, 13, 14},
     };
-    
 #endif
     
     u32 CellCounts[] =
@@ -503,6 +518,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     {
         b32 Result = ReadHeightsFromFileWin32(AllPaths[Index], &Data[Index], &DataSize[Index]);
         assert(Result);
+        Result;
     }
     
     
@@ -510,19 +526,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     // Open/create text files used as output for performance data
     //
-    FILE *FilePerf;
-    FILE *FileData;
-    {
-        int ErrorCode = fopen_s(&FilePerf, "..\\perf\\perf.txt", "w");
-        assert(!ErrorCode);
-        fprintf(FilePerf, "Style;Optimization;Case#;Iteration#;Total;#;_Marching;_#;__BinarySum;__#;__Lerp;__#;");
-        fprintf(FilePerf, "__Add;__#;_Simplify;_#;__GetLineChain;__#;__MergeLines;__#\n");
-        
-        ErrorCode = fopen_s(&FileData, "..\\perf\\data.txt", "w");
-        assert(!ErrorCode);
-        fprintf(FileData, "Case#;Iteration#;");
-    }
+    FILE *FilePerf = nullptr;
+    CreateFile(&FilePerf, "..\\perf\\perf.txt");
+    WritePerfHeadersToFile(&FilePerf);
     
+    FILE *FileData = nullptr;
+    CreateFile(&FileData, "..\\perf\\data.txt");
+    WriteDataHeadersToFile(&FileData);
     
     
     
@@ -555,26 +565,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            fprintf(FilePerf, "oop_std;");
-            fprintf(FileData, "oop_std;");
-#if OPTIMIZATION == 0
-            fprintf(FilePerf, "Od;");
-            fprintf(FileData, "Od;");
-#elif OPTIMIZATION == 1
-            fprintf(FilePerf, "O1;");
-            fprintf(FileData, "O1;");
-#elif OPTIMIZATION == 2
-            fprintf(FilePerf, "O2;");
-            fprintf(FileData, "O2;");
-#endif
-            fprintf(FilePerf, "%d;", Index);
-            fprintf(FileData, "%d;", Index);
-            
             for (int i = 0; i < kIterations; ++i)
             {
-                fprintf(FilePerf, "%d;", i);
-                fprintf(FileData, "%d;", i);
-                
                 MSConfig.CellCountX = CellCounts[2 * Index];
                 MSConfig.CellCountY = CellCounts[2 * Index + 1];
                 
@@ -583,28 +575,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                 MSConfig.CellSize = V2(SmallestSize, SmallestSize);
                 CellSizes[Index] = MSConfig.CellSize;
                 
-                MS.ClearTimeMeasures();
+                ClearTimeMeasurements(&MS.Measures);
                 MS.SetDataPtr(Data[Index], &MSConfig);
                 
                 int Result = MS.MarchSquares(Heights[Index]);
                 assert(Result == MarchingSquares::Ok);
                 
-                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
                 {
-                    ConvertToMicroSeconds(&MS.Measures[MeasureIndex], &Frequency);
-                    fprintf(FilePerf, "%llu;%d", 
-                            MS.Measures[MeasureIndex].TotalTime.QuadPart, MS.Measures[MeasureIndex].Count);
-                    if (MeasureIndex < 7)
-                    {
-                        fprintf(FilePerf, ";");
-                    }
-                    else
-                    {
-                        fprintf(FilePerf, "\n");
-                    }
+                    ConvertToMicroSeconds(&MS.Measures.Array[MeasureIndex], &Frequency);
+                    WritePerfToFile(FilePerf, "oop_std", OPTIMIZATION, Index, i, 
+                                    TimingParentNames[MeasureIndex], 
+                                    TimingNames[MeasureIndex], 
+                                    MS.Measures.Array[MeasureIndex].TotalTime.QuadPart,
+                                    MS.Measures.Array[MeasureIndex].Count);
+                    
                 }
                 
-                fprintf(FileData, "\n");
+                {
+                    //
+                    // Write info about data reduction
+                    WriteDataToFile(FileData, "oop_std", OPTIMIZATION, Index, i,
+                                    2*MS.LineCountAnte,
+                                    MS.GetVertexCount());
+                }
                 
                 if (i == 0)
                 {
@@ -643,26 +637,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            fprintf(FilePerf, "std;");
-            fprintf(FileData, "std;");
-#if OPTIMIZATION == 0
-            fprintf(FilePerf, "Od;");
-            fprintf(FileData, "Od;");
-#elif OPTIMIZATION == 1
-            fprintf(FilePerf, "O1;");
-            fprintf(FileData, "O1;");
-#elif OPTIMIZATION == 2
-            fprintf(FilePerf, "O2;");
-            fprintf(FileData, "O2;");
-#endif
-            fprintf(FilePerf, "%d;", Index);
-            fprintf(FileData, "%d;", Index);
-            
             for (int i = 0; i < kIterations; ++i)
             {
-                fprintf(FilePerf, "%d;", i);
-                fprintf(FileData, "%d;", i);
-                
                 State.CellSize = CellSizes[Index];
                 State.CellCountX = CellCounts[2 * Index];
                 State.CellCountY = CellCounts[2 * Index + 1];
@@ -671,27 +647,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                        (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
                 State.CellSize = V2(SmallestSize, SmallestSize);
                 
-                ZeroMemory(State.Measures, 8*sizeof(time_measure));
-                
+                ClearTimeMeasurements(&State.Measures);
                 b32 Result = MarchSquares(&State, Heights[Index]);
                 assert(Result);
                 
-                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
                 {
-                    ConvertToMicroSeconds(&State.Measures[MeasureIndex], &Frequency);
-                    fprintf(FilePerf, "%llu;%d", 
-                            State.Measures[MeasureIndex].TotalTime.QuadPart, State.Measures[MeasureIndex].Count);
-                    if (MeasureIndex < 7)
-                    {
-                        fprintf(FilePerf, ";");
-                    }
-                    else
-                    {
-                        fprintf(FilePerf, "\n");
-                    }
+                    ConvertToMicroSeconds(&State.Measures.Array[MeasureIndex], &Frequency);
+                    WritePerfToFile(FilePerf, "std", OPTIMIZATION, Index, i, 
+                                    TimingParentNames[MeasureIndex], 
+                                    TimingNames[MeasureIndex], 
+                                    State.Measures.Array[MeasureIndex].TotalTime.QuadPart,
+                                    State.Measures.Array[MeasureIndex].Count);
                 }
                 
-                fprintf(FileData, "\n");
+                {
+                    //
+                    // Write info about data reduction
+                    WriteDataToFile(FileData, "std", OPTIMIZATION, Index, i,
+                                    2*State.LineCountAnte,
+                                    State.Vertices.size());
+                }
                 
                 if (i == 0)
                 {
@@ -722,33 +698,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     // - Generate lines from data using Marching Squares, non-OOP and not using standard library
     //
 #if kTest == 2
-    c_style_state State;
     {
+        c_style_state State;
+        
         LARGE_INTEGER Frequency;
         QueryPerformanceFrequency(&Frequency);
         
         for (u32 Index = 0; Index < gDataCount; ++Index)
         {
-            fprintf(FilePerf, "c_style;");
-            fprintf(FileData, "c_style;");
-#if OPTIMIZATION == 0
-            fprintf(FilePerf, "Od;");
-            fprintf(FileData, "Od;");
-#elif OPTIMIZATION == 1
-            fprintf(FilePerf, "O1;");
-            fprintf(FileData, "O1;");
-#elif OPTIMIZATION == 2
-            fprintf(FilePerf, "O1;");
-            fprintf(FileData, "O1;");
-#endif
-            fprintf(FilePerf, "%d;", Index);
-            fprintf(FileData, "%d;", Index);
-            
             for (int i = 0; i < kIterations; ++i)
             {
-                fprintf(FilePerf, "%d;", i);
-                fprintf(FileData, "%d;", i);
-                
                 State.CellSize = CellSizes[Index];
                 State.CellCountX = CellCounts[2 * Index];
                 State.CellCountY = CellCounts[2 * Index + 1];
@@ -756,33 +715,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                                        (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
                 State.CellSize = V2(SmallestSize, SmallestSize);
                 
-                ZeroMemory(State.Measures, 8*sizeof(time_measure));
-                
+                ClearTimeMeasurements(&State.Measures);
                 b32 Result = MarchSquares(&State, Data[Index], &Heights[Index]);
                 assert(Result);
                 
-                for (u32 MeasureIndex = 0; MeasureIndex < 8; ++MeasureIndex)
+                for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
                 {
-                    ConvertToMicroSeconds(&State.Measures[MeasureIndex], &Frequency);
-                    fprintf(FilePerf, "%llu;%d", 
-                            State.Measures[MeasureIndex].TotalTime.QuadPart, State.Measures[MeasureIndex].Count);
-                    if (MeasureIndex < 7)
-                    {
-                        fprintf(FilePerf, ";");
-                    }
-                    else
-                    {
-                        fprintf(FilePerf, "\n");
-                    }
+                    ConvertToMicroSeconds(&State.Measures.Array[MeasureIndex], &Frequency);
+                    WritePerfToFile(FilePerf, "c_style", OPTIMIZATION, Index, i, 
+                                    TimingParentNames[MeasureIndex], 
+                                    TimingNames[MeasureIndex], 
+                                    State.Measures.Array[MeasureIndex].TotalTime.QuadPart,State.Measures.Array[MeasureIndex].Count);
                 }
                 
-                fprintf(FileData, "\n");
+                {
+                    //
+                    // Write info about data reduction
+                    WriteDataToFile(FileData, "c_style", OPTIMIZATION, Index, i,
+                                    2*State.LineCountAnte,
+                                    State.Vertices.Used);
+                }
                 
                 if (i == 0)
                 {
                     //
                     // Buffers, create them from this version (buffer creation not included in the 
-                    // perfomance measurement).
+                    // performance measurement).
                     Result = SetupBuffers(&DirectXState, 
                                           State.Vertices.Data, State.Vertices.Used, 
                                           State.Indices.Data, State.Indices.Used,
@@ -796,6 +754,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
                 }
             }
         }
+        
+        for (int i = 0; i < 5; ++i)
+        {
+            Free(&Heights[i]);
+        }
+        
+        Free(&State);
     }
 #endif // kTest == 2
     
@@ -806,16 +771,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     fclose(FileData);
     fclose(FilePerf);
-    
-    
-#if kTest == 2
-    for (int i = 0; i < 5; ++i)
-    {
-        Free(&Heights[i]);
-    }
-    
-    Free(&State);
-#endif
     
     
     
@@ -844,8 +799,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         ShaderConstants.Z = 0.0f;
         assert(sizeof(shader_constants) % 16 == 0);
         
-        assert(CreateConstantBuffer(&DirectXState, &ShaderConstants, sizeof(shader_constants), &ConstantBuffer));
+        b32 Result = CreateConstantBuffer(&DirectXState, &ShaderConstants, sizeof(shader_constants), &ConstantBuffer);
+        assert(Result);
         UseConstantBuffer(&DirectXState, &ConstantBuffer);
+        
+        Result;
     }
     
     

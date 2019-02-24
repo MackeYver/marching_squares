@@ -25,8 +25,13 @@
 
 #include "oop_std.h"
 
-#include <assert.h>
 #include <stdio.h>
+
+#ifdef DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
 
 using namespace std;
 
@@ -191,6 +196,7 @@ MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::l
     
     u32 Count = LinePoints.count(Key);
     assert(Count > 0); // There will always exist at least one point that generates this key
+    Count;
     
     std::vector<MarchingSquares::line_point> *Points = &LinePoints[Key];
     assert(Points->size() != 0); // There will always exist at least one point that generates this key
@@ -289,7 +295,8 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
     std::vector<line_segment> LineSegments;
     std::map<u32, std::vector<line_point> > LinePoints;
     
-    StartMeasure(&TTotal);
+    LineCountAnte = 0;
+    
     for (auto& CurrHeight : LevelHeights) {
         LineSegments.clear();
         LinePoints.clear();
@@ -299,10 +306,9 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
         
         //
         // March the Squares!
-        StartMeasure(&TMarching);
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&TBinarySum);
+                StartMeasure(&Measures.TBinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -319,22 +325,22 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&TBinarySum);
+                StopMeasure(&Measures.TBinarySum);
                 
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&TLerp);
+                StartMeasure(&Measures.TLerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&TLerp);
+                StopMeasure(&Measures.TLerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&TAdd);
+                StartMeasure(&Measures.TAdd);
                 switch (Sum) {
                     case 1: Add(LineSegments, LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(LineSegments, LinePoints, P, Bottom, Right);   break;
@@ -359,16 +365,14 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                     case 13: Add(LineSegments, LinePoints, P, Right , Bottom); break;
                     case 14: Add(LineSegments, LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&TAdd);
+                StopMeasure(&Measures.TAdd);
             }
         }
-        StopMeasure(&TMarching);
         
+        LineCountAnte += LineSegments.size();
         
         if (LineSegments.size() > 0)
         {
-            StartMeasure(&TSimplify);
-            
             f32 PrevSlope;
             f32 CurrSlope = 0.0f;
             
@@ -378,15 +382,15 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 
                 vector<line_segment> CurrChain;
                 
-                StartMeasure(&TGetLineChain);
+                StartMeasure(&Measures.TGetLineChain);
                 GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
-                StopMeasure(&TGetLineChain);
+                StopMeasure(&Measures.TGetLineChain);
                 
                 for (vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChain.size();
                      ++LineIndex)
                 {
-                    StartMeasure(&TMergeLines);
+                    StartMeasure(&Measures.TMergeLines);
                     
                     line_segment *Line = &CurrChain[LineIndex];
                     
@@ -415,14 +419,11 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                         
                         Indices.push_back((u16)0xFFFF);
                     }
-                    StopMeasure(&TMergeLines);
+                    StopMeasure(&Measures.TMergeLines);
                 }
             }
-            StopMeasure(&TSimplify);
         }
     }
-    StopMeasure(&TTotal);
-    
     
     return Ok;
 }

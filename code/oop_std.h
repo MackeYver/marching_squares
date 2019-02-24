@@ -112,31 +112,8 @@ class MarchingSquares {
     result MarchSquares(std::vector<f32> const &LevelHeights);
     
     
-    //
-    // @debug
-    union
-    {
-        struct
-        {
-            time_measure TTotal;
-            
-            time_measure TMarching;
-            time_measure TBinarySum;
-            time_measure TLerp;
-            time_measure TAdd;
-            
-            time_measure TSimplify;
-            time_measure TGetLineChain;
-            time_measure TMergeLines;
-        };
-        
-        time_measure Measures[8]; 
-    };
-    
-    void ClearTimeMeasures()
-    {
-        ZeroMemory(Measures, 8 * sizeof(time_measure));
-    }
+    time_measurements Measures;
+    u32 LineCountAnte;
     
     
     //
