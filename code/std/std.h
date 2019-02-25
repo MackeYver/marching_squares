@@ -25,8 +25,8 @@
 #ifndef std__h
 #define std__h
 
-#include "Mathematics.h"
-#include "Timing.h"
+#include "..\Mathematics.h"
+#include "..\Timing.h"
 
 #include <vector>
 

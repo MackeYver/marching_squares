@@ -1,0 +1,145 @@
+#Finishing the project
+---------------------
+A couple of hectic weeks at work later and I have finally the time and energy to finish
+this project.
+
+Edit: this turned into a novel...
+
+
+#C style version
+---------------
+Yesterday I finished the c_style version of the algorithm. In order to do that I needed to 
+code some dynamic arrays (nothing fancy, just trivial realloc() stuff) and a very basic 
+implementation of a Binary Search Tree.
+
+I wrote the dynamic arrays specific for each data type, no fancy tricks at all. It is not
+much code and I could write it once and then copy and paste it into different files. With
+small modifications I had all the dynamic arrays I needed. I didn't use templates since the 
+intention with this version is to avoid the use of the standard library.
+
+To make it possible to determine which line segments connects, I put all the vertices in a 
+std::map. Using a key, which is calculated from the position of the point, it is possible 
+to retrieve all the points that has the same position. Thus also finding all the line 
+segments that share one vertex.
+
+I decided to replacement the std::map with a Binary Search Tree; a hash would also be fine
+probably. But then I would have to worry about collisions and stuff. I just seemed like a 
+better idea to use Binary Search Tree. The Binary Search Tree (BST) will automagically be 
+in the correct order and searching it is trivial. Each node in the BST has a dynamic array 
+of line points.
+
+When all the code was written for the version, it produced roughly the same result. The c-
+style version was actually the fastest one, and it was the "simplify" part that stood for 
+the win. It was a lot faster.
+For the three first cases the results seemed identical, but looking at the other two -- the 
+last one in particular -- the results differed. The last case seemed to miss a lot of lines.
+Also, after a closer look it was clear that the c_style version did not simplify the mesh. 
+The size was the same before and after, while the other two versions reduced the size of the 
+vertex data with ~34%. Clearly something didn't add up.
+
+
+#Bug #1
+------
+Well, firstly, by chance I saw that the GetLineChain() function was not actually finished. 
+I forgot to add a Push() statement (!). The way GetLineChain() works is that it adds all the 
+line segments that connects, starting from a given line segment. It looks in both directions
+of the line segment. Or rather, it checks if any of the two endpoints matches any other point
+that belongs to another line segment. A better name rather than line chain would be polyline.
+
+The part I forgot about was adding the "backwards" part to the polyline... 
+Coming to think of it, it was a bit strange that it worked at all. But it would explain why 
+the result looked almost correct but lacking some lines. The GetLineChain() function didn't 
+return the entire polyline but only a part of it!
+
+
+#Bug #2
+------
+Fixing #1 revealed some bigger problems. Now we got longer chains (polylines) but the result
+actually looked worse. It seemed like a lot of the lines started at the origin (0, 0) even if 
+they shouldn't. My first thought was that there was something fishy with the polylines.
+
+A quick glance at the code didn't reveal anything troublesome. I started to step through the 
+code. This was like finding the needle in the haystack; I was not sure what I was looking for
+and the amount of data was a problem. The issue seemed to be related to the polylines, i.e. 
+some parts of it was corrupt.
+
+I decided to pull out the old printf! I printed the line_point count of each BST node that 
+was added or modified, along with its key. Then I did the same for when I searched the BST for 
+a specific key. This produced a lot of output in the console and to be able to analyse it I 
+copied it from the console and pasted it into my trusted old friend: Excel.
+Using Excel I could see some interesting stuff:
+
+ 1. Nodes with a key = 0 was added
+    - While theoretically possible (key = 0 would mean that the position of the vertex was
+      the origin) the amount of nodes that had a key = 0 was unlikely to be correct.
+    - A key of 0 would indicate a position of zero, which matched what I saw: a lot of lines
+      starting at the origin.
+
+ 2. For some keys, the array in the retrieved node contained zero line_points.
+    - This shouldn't happen at all, there should always be at least one line_point in each 
+      node. Why would the node have been added otherwise?
+    - Cross referencing the keys I could see that the keys that returned a node with zero
+      line points clearly had line_points in them when they were added.
+    - The key that resulted in zero line points were searched multiple times and it worked at
+      some times but failed at others.
+
+It was weird that the results of searching the BST so arbitrary, surely there must an error in
+the Find() function? The data must be corrupted somehow? Turns out that the data was not 
+corrupted but a logic error in an if statement. Instead of recursively searching the left node
+if the search-key was smaller than the node's key, the search was sent to the right node.
+
+This:
+  if (Node->Key > Key)  Find(Node->Left);
+
+should be more like:
+  if (Key < Node->key)  Find(Node->Left);
+
+That change completely solved #2, now every search found at least one line_point. Yay! However,
+#1 was still a problem, for some weird reason we still tried to add a key = 0 many, many times!
+Having all the data in Excel turned out to be very helpful here as well, I could easily find 
+test cases to use in a data break point. Using some test cases I could isolate the problem, it
+was a classic bug actually. Turns out that I was off by one in a for loop (god damnit).
+That caused it to add garbage basically.
+
+This:
+	for (s32 Index = Backwards.Used; Index >= 0; --Index)
+    {
+        Push(Chain, &Backwards.Data[Index]);
+    }
+
+Should be this:
+	for (s32 Index = Backwards.Used - 1; Index >= 0; --Index)
+	{
+        Push(Chain, &Backwards.Data[Index]);
+	}
+
+Problem #2 solved. Now the c style version produces the exact same result as the other two. I 
+checked this in Excel by comparing the outputs of the printf statements.
+
+
+#Lessons learned
+---------------
+Exporting data and analysing it in Excel turns out to be a huge win. I am very experienced in 
+Excel since I use that all day at my current work, so it makes it very easy to do different
+analysis.
+
+Having a version, or a test case, that you know is 100% correct is extremely valuable. This way
+you can compare the different versions and find what's wrong.
+
+
+#Next step
+---------
+The c style version performs better and has the least amount of dependencies. When it comes to 
+line of codes (I exclude the code for the dynamic arrays and the BST since I'm not include 
+std::vector or std::map), this version falls in the middle of the three.
+
+Now, there is probably a lot of stuff that could be done better and I might have done something
+that's far from optimal in the two other versions, but it seems to me like the c style version
+is the clear winner. But in all honesty, I was biased from the start and this project could and
+should not be viewed as a scientific endeouvor.
+
+I will now pull out the c style version and do some code clean up. I will save the two other 
+version in seperate folders.
+
+The next optimization step would logically be to multithread it, but that will have to wait, 
+that will have to be another project.

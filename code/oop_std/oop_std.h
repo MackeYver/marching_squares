@@ -34,8 +34,8 @@
 #include <map>
 #include <vector>
 
-#include "Mathematics.h"
-#include "Timing.h"
+#include "../Mathematics.h"
+#include "../Timing.h"
 
 
 
