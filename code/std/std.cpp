@@ -26,10 +26,12 @@
 
 #include <map>
 
+#if 0
 #ifdef DEBUG
 #include <assert.h>
 #else
 #define assert(x)
+#endif
 #endif
 
 
@@ -141,7 +143,7 @@ line_segment *GetNextLineSegment(std::vector<line_segment>& LineSegments,
         assert(Point.LineIndex < LineSegments.size());
         
         line_segment *NextLine = &LineSegments[Point.LineIndex];
-        if (NextLine != CurrLine)
+        if (NextLine != CurrLine && !NextLine->IsProcessed)
         {
             return NextLine;
         }
@@ -155,41 +157,48 @@ line_segment *GetNextLineSegment(std::vector<line_segment>& LineSegments,
 void GetLineChain(std::vector<line_segment>& LineSegments, 
                   std::map<u32, std::vector<line_point> >& LinePoints,
                   line_segment& LineInChain, 
-                  std::vector<line_segment>& Chain)
+                  std::vector<line_segment>& Chain, 
+                  time_measurements *M)
 {
     Chain.clear();
     
+    StartMeasure(&M->Forward);
     line_segment *Line = &LineInChain;
+    
     
     //
     // "Forward in the chain"
     // Check in direction of P[1]
     std::vector<line_segment> Forward;
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
         Forward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
     }
+    StopMeasure(&M->Forward);
     
     
     //
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
     // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
+    StartMeasure(&M->Backward);
     Line = &Forward[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     
     std::vector<line_segment> Backward;
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
         Backward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
+    StopMeasure(&M->Backward);
     
+    StartMeasure(&M->Concatenate);
     Chain.reserve(Forward.size() + Backward.size());
     
 #if 0
@@ -200,15 +209,16 @@ void GetLineChain(std::vector<line_segment>& LineSegments,
     std::vector<line_segment>::size_type Size = Backward.size();
     if (Size > 0)
     {
-        for (std::vector<line_segment>::size_type Index = Size - 1;
-             Index >= 0;
-             --Index)
+        for (std::vector<line_segment>::size_type Index = 0;
+             Index < Size;
+             ++Index)
         {
-            Chain.push_back(Backward[Index]);
+            Chain.push_back(Backward[Size - Index - 1]);
         }
     }
     std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
 #endif
+    StopMeasure(&M->Concatenate);
 }
 
 
@@ -253,7 +263,7 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
         // March the Squares!
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&State->Measures.TBinarySum);
+                StartMeasure(&State->Measures.BinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -270,21 +280,21 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&State->Measures.TBinarySum);
+                StopMeasure(&State->Measures.BinarySum);
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&State->Measures.TLerp);
+                StartMeasure(&State->Measures.Lerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&State->Measures.TLerp);
+                StopMeasure(&State->Measures.Lerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&State->Measures.TAdd);
+                StartMeasure(&State->Measures.Add);
                 switch (Sum) {
                     case 1: Add(LineSegments, LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(LineSegments, LinePoints, P, Bottom, Right);   break;
@@ -309,7 +319,7 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                     case 13: Add(LineSegments, LinePoints, P, Right , Bottom); break;
                     case 14: Add(LineSegments, LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&State->Measures.TAdd);
+                StopMeasure(&State->Measures.Add);
             }
         }
         
@@ -325,16 +335,16 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                 if (CurrLine.IsProcessed)  continue;
                 
                 std::vector<line_segment> CurrChain;
-                StartMeasure(&State->Measures.TGetLineChain);
-                GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
-                StopMeasure(&State->Measures.TGetLineChain);
+                //StartMeasure(&State->Measures.TGetLineChain);
+                GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain, &State->Measures);
+                //StopMeasure(&State->Measures.TGetLineChain);
                 
                 std::vector<line_segment>::size_type CurrChainSize = CurrChain.size();
                 for (std::vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChainSize;
                      ++LineIndex)
                 {
-                    StartMeasure(&State->Measures.TMergeLines);
+                    StartMeasure(&State->Measures.MergeLines);
                     
                     line_segment *Line = &CurrChain[LineIndex];
                     
@@ -363,7 +373,7 @@ b32 MarchSquares(std_state *State, std::vector<f32> const& LevelHeights)
                         
                         Indices->push_back((u16)0xFFFF);
                     }
-                    StopMeasure(&State->Measures.TMergeLines);
+                    StopMeasure(&State->Measures.MergeLines);
                 }
             }
         }

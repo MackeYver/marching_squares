@@ -31,12 +31,6 @@
 #include "Types.h"
 #include "line_point_darray.h"
 
-#ifdef DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
-
 
 
 struct line_points_bt_node

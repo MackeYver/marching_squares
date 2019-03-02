@@ -27,10 +27,12 @@
 
 #include <stdio.h>
 
+#if 0
 #ifdef DEBUG
 #include <assert.h>
 #else
 #define assert(x)
+#endif
 #endif
 
 using namespace std;
@@ -206,7 +208,7 @@ MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::l
         assert(Point.LineIndex < LineSegments.size());
         
         MarchingSquares::line_segment *NextLine = &LineSegments[Point.LineIndex];
-        if (NextLine != CurrLine)
+        if (NextLine != CurrLine && !NextLine->IsProcessed)
         {
             return NextLine;
         }
@@ -218,7 +220,8 @@ MarchingSquares::line_segment *GetNextLineSegment(std::vector<MarchingSquares::l
 void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments, 
                   std::map<u32, std::vector<MarchingSquares::line_point> >& LinePoints,
                   MarchingSquares::line_segment& LineInChain, 
-                  vector<MarchingSquares::line_segment>& Chain)
+                  vector<MarchingSquares::line_segment>& Chain,
+                  time_measurements *M)
 {
     Chain.clear();
     
@@ -228,34 +231,39 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
     //
     // "Forward in the chain"
     // Check in direction of P[1]
+    StartMeasure(&M->Forward);
+    
     std::vector<line_segment> Forward;
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
-        //Chain.push_back(*Line);
         Forward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
     }
+    StopMeasure(&M->Forward);
     
     
     //
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
     // - this is the slow and stupid verions, we'll look at perfomance as soon as it's working
-    //Line = &Chain[0];
+    StartMeasure(&M->Backward);
+    
     Line = &Forward[0];
     Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     std::vector<line_segment> Backward;
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
-        //Chain.insert(Chain.begin(), *Line); // // TODO(Marcus): SLOOOOOOOOW!
         Backward.push_back(*Line);
         
         Line->IsProcessed = true;
         Line= GetNextLineSegment(LineSegments, LinePoints, Line, 0);
     }
+    StopMeasure(&M->Backward);
     
+    
+    StartMeasure(&M->Concatenate);
     Chain.reserve(Forward.size() + Backward.size());
     
 #if 0
@@ -266,15 +274,16 @@ void GetLineChain(std::vector<MarchingSquares::line_segment>& LineSegments,
     std::vector<line_segment>::size_type Size = Backward.size();
     if (Size > 0)
     {
-        for (std::vector<line_segment>::size_type Index = Size - 1;
-             Index >= 0;
-             --Index)
+        for (std::vector<line_segment>::size_type Index = 0;
+             Index < Size;
+             ++Index)
         {
-            Chain.push_back(Backward[Index]);
+            Chain.push_back(Backward[Size - Index - 1]);
         }
     }
     std::copy(Forward.begin(), Forward.end(), back_inserter(Chain));
 #endif
+    StopMeasure(&M->Concatenate);
 }
 
 
@@ -308,7 +317,7 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
         // March the Squares!
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&Measures.TBinarySum);
+                StartMeasure(&Measures.BinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -325,22 +334,22 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&Measures.TBinarySum);
+                StopMeasure(&Measures.BinarySum);
                 
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&Measures.TLerp);
+                StartMeasure(&Measures.Lerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&Measures.TLerp);
+                StopMeasure(&Measures.Lerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&Measures.TAdd);
+                StartMeasure(&Measures.Add);
                 switch (Sum) {
                     case 1: Add(LineSegments, LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(LineSegments, LinePoints, P, Bottom, Right);   break;
@@ -365,7 +374,7 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                     case 13: Add(LineSegments, LinePoints, P, Right , Bottom); break;
                     case 14: Add(LineSegments, LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&Measures.TAdd);
+                StopMeasure(&Measures.Add);
             }
         }
         
@@ -382,15 +391,15 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                 
                 vector<line_segment> CurrChain;
                 
-                StartMeasure(&Measures.TGetLineChain);
-                GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain);
-                StopMeasure(&Measures.TGetLineChain);
+                //StartMeasure(&Measures.TGetLineChain);
+                GetLineChain(LineSegments, LinePoints, CurrLine, CurrChain, &Measures);
+                //StopMeasure(&Measures.TGetLineChain);
                 
                 for (vector<line_segment>::size_type LineIndex = 0;
                      LineIndex < CurrChain.size();
                      ++LineIndex)
                 {
-                    StartMeasure(&Measures.TMergeLines);
+                    StartMeasure(&Measures.MergeLines);
                     
                     line_segment *Line = &CurrChain[LineIndex];
                     
@@ -419,7 +428,7 @@ MarchingSquares::result MarchingSquares::MarchSquares(std::vector<f32> const &Le
                         
                         Indices.push_back((u16)0xFFFF);
                     }
-                    StopMeasure(&Measures.TMergeLines);
+                    StopMeasure(&Measures.MergeLines);
                 }
             }
         }

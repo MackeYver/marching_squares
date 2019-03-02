@@ -31,13 +31,6 @@
 #include <stdio.h>
 #include <cctype>
 
-#include "DirectXRenderer.h"
-#include "Types.h"
-#include "Mathematics.h"
-
-#include "f32_darray.h"
-#include "c_style.h"
-
 #ifdef DEBUG
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
 #include <assert.h>
@@ -46,7 +39,15 @@
 #define assert(x)
 #endif
 
-//#define WritePerfToFile
+#include "DirectXRenderer.h"
+#include "Types.h"
+#include "Mathematics.h"
+
+#include "f32_darray.h"
+#include "c_style.h"
+
+
+#define ShouldWritePerfToFile
 
 //
 // Todo:
@@ -487,17 +488,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     
     
     
-#ifdef WritePerfToFile
+#ifdef ShouldWritePerfToFile
     //
     // Open/create text files used as output for performance data
     //
     FILE *FilePerf = nullptr;
     CreateFile(&FilePerf, "..\\perf\\perf.txt");
-    WritePerfHeadersToFile(&FilePerf);
+    WritePerfHeadersToFile(FilePerf);
     
     FILE *FileData = nullptr;
     CreateFile(&FileData, "..\\perf\\data.txt");
-    WriteDataHeadersToFile(&FileData);
+    WriteDataHeadersToFile(FileData);
 #endif
     
     
@@ -527,57 +528,52 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         LARGE_INTEGER Frequency;
         QueryPerformanceFrequency(&Frequency);
         
-        for (u32 Index = 0; Index < gDataCount; ++Index)
+        for (u32 Index = 1; Index < 2; ++Index)//gDataCount; ++Index)
         {
+            State.CellSize = CellSizes[Index];
+            State.CellCountX = CellCounts[2 * Index];
+            State.CellCountY = CellCounts[2 * Index + 1];
+            f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(State.CellCountX - 1), 
+                                   (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
+            State.CellSize = V2(SmallestSize, SmallestSize);
+            
+            ClearTimeMeasurements(&State.Measures);
+            
+            b32 Result = MarchSquares(&State, Data[Index], &Heights[Index]);
+            
+            assert(Result);
+            
+#ifdef ShouldWritePerfToFile
+            u32 Count = sizeof(time_measurements) / sizeof(time_measure);
+            for (u32 MeasureIndex = 0; MeasureIndex < Count; ++MeasureIndex)
             {
-                State.CellSize = CellSizes[Index];
-                State.CellCountX = CellCounts[2 * Index];
-                State.CellCountY = CellCounts[2 * Index + 1];
-                f32 SmallestSize = min((f32)(Width - 2*gPadding.x) / (f32)(State.CellCountX - 1), 
-                                       (f32)(Height -2*gPadding.y) / (f32)(State.CellCountY - 1));
-                State.CellSize = V2(SmallestSize, SmallestSize);
-                
-                ClearTimeMeasurements(&State.Measures);
-                b32 Result = MarchSquares(&State, Data[Index], &Heights[Index]);
+                WritePerfToFile(FilePerf, "c_style", OPTIMIZATION, Index, 0, 
+                                TimingParentNames[MeasureIndex], 
+                                TimingNames[MeasureIndex], 
+                                State.Measures.Array[MeasureIndex].TotalCycleCount,State.Measures.Array[MeasureIndex].Count);
+            }
+            
+            //
+            // Write info about data reduction
+            WriteDataToFile(FileData, "c_style", OPTIMIZATION, Index, 0,
+                            2*State.LineCountAnte,
+                            State.Vertices.Used);
+#endif
+            
+            {
+                //
+                // Buffers, create them from this version (buffer creation not included in the 
+                // performance measurement).
+                Result = SetupBuffers(&DirectXState, 
+                                      State.Vertices.Data, State.Vertices.Used, 
+                                      State.Indices.Data, State.Indices.Used,
+                                      &ContourLines[Index]);
                 assert(Result);
                 
-#ifdef WritePerfToFile
-                for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
-                {
-                    ConvertToMicroSeconds(&State.Measures.Array[MeasureIndex], &Frequency);
-                    WritePerfToFile(FilePerf, "c_style", OPTIMIZATION, Index, i, 
-                                    TimingParentNames[MeasureIndex], 
-                                    TimingNames[MeasureIndex], 
-                                    State.Measures.Array[MeasureIndex].TotalTime.QuadPart,State.Measures.Array[MeasureIndex].Count);
-                    
-                    //
-                    // Write info about data reduction
-                    WriteDataToFile(FileData, "c_style", OPTIMIZATION, Index, i,
-                                    2*State.LineCountAnte,
-                                    State.Vertices.Used);
-                    
-                    //
-                    // Close files
-                    fclose(FileData);
-                    fclose(FilePerf);
-                }
-#endif
-                
-                {
-                    //
-                    // Buffers, create them from this version (buffer creation not included in the 
-                    // performance measurement).
-                    Result = SetupBuffers(&DirectXState, 
-                                          State.Vertices.Data, State.Vertices.Used, 
-                                          State.Indices.Data, State.Indices.Used,
-                                          &ContourLines[Index]);
-                    assert(Result);
-                    
-                    Result = SetupGridLines(&DirectXState, 
-                                            State.CellCountX, State.CellCountY, State.CellSize, 
-                                            &GridLines[Index]);
-                    assert(Result);
-                }
+                Result = SetupGridLines(&DirectXState, 
+                                        State.CellCountX, State.CellCountY, State.CellSize, 
+                                        &GridLines[Index]);
+                assert(Result);
             }
         }
         
@@ -587,6 +583,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         }
         
         Free(&State);
+        fclose(FileData);
+        fclose(FilePerf);
     }
     
     

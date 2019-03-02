@@ -28,11 +28,6 @@
 #include <stdlib.h>
 #include "Types.h"
 
-#ifdef DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
 
 
 

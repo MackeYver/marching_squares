@@ -38,7 +38,7 @@ IF %BuildMode%=="release" (
 IF %BuildMode%=="fastdebug" (
   ECHO Fast debug mode
   SET CompilerOptions=/O2 !GeneralCompilerOptions! /Zi /GS-
-  SET CompilerOptions=/Gs9999999 /DWIN32=1 /DOPTIMIZATION=2 !CompilerOptions!
+  SET CompilerOptions=/Gs9999999 /DDEBUG=1 /DWIN32=1 /DOPTIMIZATION=2 !CompilerOptions!
 ) 
 IF  %BuildMode%=="debug" (
   ECHO Debug mode
@@ -78,7 +78,7 @@ REM Temp: gdi32.lib winmm.lib kernel32.lib
 IF %BuildMode%=="release" (
   SET LinkerOptions=/MANIFEST:NO !LinkerLibs!  
 ) ELSE (
-  SET LinkerOptions=/Profile /DEBUG:FULL /INCREMENTAL:NO /OPT:ICF /OPT:REF /MANIFEST:NO !LinkerLibs!
+  SET LinkerOptions=/PROFILE /DEBUG:FULL /INCREMENTAL:NO /OPT:REF /OPT:ICF /MANIFEST:NO !LinkerLibs!
 )
 
 REM MANIFEST:NO    Prevents the linker from adding a manifest to the exe (this is done "manually" further down)

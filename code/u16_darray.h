@@ -25,11 +25,6 @@
 #ifndef u16_darray__h
 #define u16_darray__h
 
-#ifdef DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
 
 
 //

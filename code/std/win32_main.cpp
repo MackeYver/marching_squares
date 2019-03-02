@@ -39,14 +39,14 @@
 
 #ifdef DEBUG
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
-#include <assert.h>
+//#include <assert.h>
 #else
 #define DebugPrint(...)
-#define assert(x)
+//#define assert(x)
 #endif
 
 
-//#define SavePerfToFile
+#define SavePerfToFile
 
 //
 // Todo:
@@ -469,11 +469,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     //
     FILE *FilePerf = nullptr;
     CreateFile(&FilePerf, "..\\..\\perf\\perf_std.txt");
-    WritePerfHeadersToFile(&FilePerf);
+    WritePerfHeadersToFile(FilePerf);
     
     FILE *FileData = nullptr;
     CreateFile(&FileData, "..\\..\\perf\\data_std.txt");
-    WriteDataHeadersToFile(&FileData);
+    WriteDataHeadersToFile(FileData);
 #endif
     
     
@@ -517,26 +517,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             assert(Result);
             
 #ifdef SavePerfToFile
-            for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
+            u32 Count = sizeof(time_measurements) / sizeof(time_measure);
+            for (u32 MeasureIndex = 0; MeasureIndex < Count; ++MeasureIndex)
             {
-                ConvertToMicroSeconds(&State.Measures.Array[MeasureIndex], &Frequency);
-                WritePerfToFile(FilePerf, "std", OPTIMIZATION, Index, i, 
+                WritePerfToFile(FilePerf, "std", OPTIMIZATION, Index, 0, 
                                 TimingParentNames[MeasureIndex], 
                                 TimingNames[MeasureIndex], 
-                                State.Measures.Array[MeasureIndex].TotalTime.QuadPart,
-                                State.Measures.Array[MeasureIndex].Count);
-                
-                //
-                // Write info about data reduction
-                WriteDataToFile(FileData, "std", OPTIMIZATION, Index, i,
-                                2*State.LineCountAnte,
-                                State.Vertices.size());
-                
-                //
-                // Close files
-                fclose(FileData);
-                fclose(FilePerf);
+                                State.Measures.Array[MeasureIndex].TotalCycleCount,State.Measures.Array[MeasureIndex].Count);
             }
+            
+            //
+            // Write info about data reduction
+            WriteDataToFile(FileData, "std", OPTIMIZATION, Index, 0,
+                            2*State.LineCountAnte,
+                            State.Vertices.size());
 #endif
             
             {

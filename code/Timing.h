@@ -25,97 +25,114 @@
 #ifndef Timing_h
 #define Timing_h
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <stdio.h>
-
-#ifdef DEBUG
+#include <string.h>
 #include <assert.h>
-#else
-#define assert(x)
-#endif
+#include <intrin.h>
 
 #include "Types.h"
 
+
+
 struct time_measure
 {
-    LARGE_INTEGER TotalTime;
-    LARGE_INTEGER StartTime;
+    unsigned __int64 TotalCycleCount;
+    unsigned __int64 StartCycleCount;
     u32 Count;
 };
 
+
+
+#if 0 
+#define StartMeasure(x)
+#define StopMeasure(x)
+#define ConvertToMicroseconds(x)
+#else
 static void StartMeasure(time_measure *Measure)
 {
-    QueryPerformanceCounter(&Measure->StartTime);
+    Measure->StartCycleCount = __rdtsc();
 }
 
 static void StopMeasure(time_measure *Measure)
 {
+#if 0
     LARGE_INTEGER EndTime;
     QueryPerformanceCounter(&EndTime);
     
     Measure->TotalTime.QuadPart += EndTime.QuadPart - Measure->StartTime.QuadPart;
     ++Measure->Count;
+#endif
+    
+    unsigned __int64 CurrentCycleCount = __rdtsc();
+    Measure->TotalCycleCount += CurrentCycleCount - Measure->StartCycleCount;
+    ++Measure->Count;
 }
 
+#if 0
 static void ConvertToMicroSeconds(time_measure *Measure, LARGE_INTEGER *Frequency)
 {
     Measure->TotalTime.QuadPart *= 1000000;
     Measure->TotalTime.QuadPart /= Frequency->QuadPart;
 }
+#else
+#define ConvertToMicroseconds(x)
+#endif
+#endif
 
 
 union time_measurements
 {
     struct
     {
-        //time_measure TTotal;
+        time_measure BinarySum;
+        time_measure Lerp;
+        time_measure Add;
         
-        //time_measure TMarching;
-        time_measure TBinarySum;
-        time_measure TLerp;
-        time_measure TAdd;
-        
-        //time_measure TSimplify;
-        time_measure TGetLineChain;
-        time_measure TMergeLines;
+        time_measure Forward;
+        time_measure Backward;
+        time_measure CalculateKey;
+        time_measure Find;
+        time_measure Loop;
+        time_measure Concatenate;
+        time_measure MergeLines;
     };
     
-    //time_measure Array[8]; 
-    time_measure Array[5]; 
+    time_measure Array[7]; 
 };
 
 static char const *TimingNames[] =
 {
-    //"Total",
-    
-    //"Marching",
     "BinarySum",
     "Lerp",
     "Add",
     
-    //"Simplify",
-    "GetLineChain",
+    "Forward",
+    "Backward",
+    "CalculateKey",
+    "Find",
+    "Loop",
+    "Concatenate",
     "MergeLines"
 };
 
 static char const *TimingParentNames[] =
 {
-    //"Total",
-    
-    //"Marching",
     "Marching",
     "Marching",
     "Marching",
     
-    //"Simplify",
-    "Simplify",
+    "GetLineChain",
+    "GetLineChain",
+    "GetNextLineSegment",
+    "GetNextLineSegment",
+    "GetNextLineSegment",
+    "GetLineChain",
     "Simplify",
 };
 
 static void ClearTimeMeasurements(time_measurements *M)
 {
-    ZeroMemory(M, sizeof(time_measurements));
+    memset(M, 0, sizeof(time_measurements));
 }
 
 
@@ -128,17 +145,19 @@ static void CreateFile(FILE **File, char const *PathAndName)
     ErrorCode;
 }
 
-static void WritePerfHeadersToFile(FILE **File)
+static void WritePerfHeadersToFile(FILE *File)
 {
     assert(File);
-    assert(*File);
-    
-    fprintf(*File, "Version;Optimization;Case#;Iteration#;ParentMeasure;Measure;Time;Count\n");
+    fprintf(File, "Version;Optimization;Case#;Iteration#;ParentMeasure;Measure;Time;Count\n");
 }
 
 static void WritePerfToFile(FILE *File, char const *Version, u32 Optimization, u32 CaseID, u32 IterationNo,
                             char const *ParentName, char const *Name, u64 Time, u32 Count)
 {
+    assert(File);
+    assert(Version);
+    assert(Name);
+    
     fprintf(File, Version);
     fprintf(File, ";");
     if (Optimization == 0)
@@ -165,17 +184,18 @@ static void WritePerfToFile(FILE *File, char const *Version, u32 Optimization, u
 }
 
 
-static void WriteDataHeadersToFile(FILE **File)
+static void WriteDataHeadersToFile(FILE *File)
 {
     assert(File);
-    assert(*File);
-    
-    fprintf(*File, "Version;Optimization;Case#;Iteration#;VertexCountAnte;VertexCountPost\n");
+    fprintf(File, "Version;Optimization;Case#;Iteration#;VertexCountAnte;VertexCountPost\n");
 }
 
 static void WriteDataToFile(FILE *File, char const *Version, u32 Optimization, u32 CaseID, u32 IterationNo,
                             u32 VertexCountAnte, u32 VertexCountPost)
 {
+    assert(File);
+    assert(Version);
+    
     fprintf(File, Version);
     fprintf(File, ";");
     if (Optimization == 0)
@@ -198,7 +218,6 @@ static void WriteDataToFile(FILE *File, char const *Version, u32 Optimization, u
     fprintf(File, "%u", VertexCountPost);
     fprintf(File, "\n");
 }
-
 
 
 #endif

@@ -30,10 +30,12 @@
 #include "v2_darray.h"
 #include "line_points_bt.h"
 
+#if 0
 #ifdef DEBUG
 #include <assert.h>
 #else
 #define assert(x)
+#endif
 #endif
 
 
@@ -69,10 +71,14 @@ inline void Add(line_segment_darray *LineSegments,
     u32 Key = CalculateKey(LP.P);
     line_point_darray *DArray = Insert(Points, Key, &LP);
     
+    printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
+    
     LP.P = P1;
     LP.LineIndex = Index;
     Key = CalculateKey(LP.P);
     DArray = Insert(Points, Key, &LP);
+    
+    printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
 }
 
 
@@ -102,31 +108,39 @@ inline f32 Lerp(f32 Length, u32 H0, u32 H1, f32 CurrentHeight) {
 line_segment *GetNextLineSegment(line_segment_darray *LineSegments, 
                                  line_points_bt *LinePoints,
                                  line_segment *CurrLine,
-                                 u32 DirectionIndex)
+                                 u32 DirectionIndex,
+                                 time_measurements *M)
 {
     assert(LineSegments);
     assert(LinePoints);
     assert(CurrLine);
     
+    StartMeasure(&M->CalculateKey);
     u32 Key = CalculateKey(CurrLine->P[DirectionIndex]);
+    StopMeasure(&M->CalculateKey);
+    
+    StartMeasure(&M->Find);
     line_point_darray *Points = Find(LinePoints, Key);
+    StopMeasure(&M->Find);
     
     if (!Points)
     {
         return nullptr;
     }
     
+    StartMeasure(&M->Loop);
     for (u32 Index = 0; Index < Points->Used; ++Index)
     {
         line_point *Point = &Points->Data[Index];
         assert(Point->LineIndex < LineSegments->Used);
         
         line_segment *NextLine = &LineSegments->Data[Point->LineIndex];
-        if (NextLine != CurrLine)
+        if (NextLine != CurrLine && !NextLine->IsProcessed)
         {
             return NextLine;
         }
     }
+    StopMeasure(&M->Loop);
     
     return nullptr; // No connected lines in the direction of the given index!
 }
@@ -136,7 +150,8 @@ line_segment *GetNextLineSegment(line_segment_darray *LineSegments,
 void GetLineChain(line_segment_darray *LineSegments, 
                   line_points_bt *LinePoints,
                   line_segment *LineInChain, 
-                  line_segment_darray *Chain)
+                  line_segment_darray *Chain,
+                  time_measurements *M)
 {
     assert(LineSegments);
     assert(LinePoints);
@@ -147,37 +162,47 @@ void GetLineChain(line_segment_darray *LineSegments,
     
     line_segment *Line = LineInChain;
     
+    
     //
     // "Forward in the chain"
     // Check in direction of P[1]
+    StartMeasure(&M->Forward);
+    
     line_segment_darray Forwards;
     Init(&Forwards, 100);
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
         Push(&Forwards, Line);
         
         Line->IsProcessed = true;
-        Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1);
+        Line = GetNextLineSegment(LineSegments, LinePoints, Line, 1, M);
     }
+    StopMeasure(&M->Forward);
     
     
     //
     // Backwards in the chain
     // Check in direction of P[0], i.e. backwards
-    // - this is the slow and stupid version, we'll look at perfomance as soon as it's working
+    StartMeasure(&M->Backward);
+    
     line_segment_darray Backwards;
     Init(&Backwards, 100);
     
     Line = &Forwards.Data[0];
-    Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
+    Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0, M);
     
-    while (Line && !Line->IsProcessed)
+    while (Line)
     {
         Push(&Backwards, Line);
         
         Line->IsProcessed = true;
-        Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0);
+        Line = GetNextLineSegment(LineSegments, LinePoints, Line, 0, M);
     }
+    StopMeasure(&M->Backward);
+    
+    //
+    // Merge the two arrays
+    StartMeasure(&M->Concatenate);
     
     u32 TotalSize = (Forwards.Used + Backwards.Used);
     s32 Diff = TotalSize - Chain->Capacity;
@@ -186,15 +211,17 @@ void GetLineChain(line_segment_darray *LineSegments,
         Grow(Chain, Diff);
     }
     
-    for (s32 Index = Backwards.Used - 1; Index >= 0; --Index)
+    for (u32 Index = 0; Index < Backwards.Used; ++Index)
     {
-        Push(Chain, &Backwards.Data[Index]);
+        Push(Chain, &Backwards.Data[Backwards.Used - Index - 1]);
     }
     
     for (u32 Index = 0; Index < Forwards.Used; ++Index)
     {
         Push(Chain, &Forwards.Data[Index]);
     }
+    
+    StopMeasure(&M->Concatenate);
     
     Free(&Forwards);
     Free(&Backwards);
@@ -251,7 +278,7 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
         // March the Squares!
         for (u32 x = 0; x < CellCountX - 1; ++x) {
             for (u32 y = 0; y < CellCountY - 1; ++y) {
-                StartMeasure(&State->Measures.TBinarySum);
+                StartMeasure(&State->Measures.BinarySum);
                 It = Begin + ((y * CellCountX) + x);
                 u8 Sum = 0;
                 
@@ -268,21 +295,21 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                 Sum += BottomRight >= CurrHeight ? 2 : 0;
                 Sum += TopRight    >= CurrHeight ? 4 : 0;
                 Sum += TopLeft     >= CurrHeight ? 8 : 0;
-                StopMeasure(&State->Measures.TBinarySum);
+                StopMeasure(&State->Measures.BinarySum);
                 
                 
                 //
                 // Vertices, on for each edge of the cell
-                StartMeasure(&State->Measures.TLerp);
+                StartMeasure(&State->Measures.Lerp);
                 v2 Bottom = V2(Lerp(CellSize.x, BottomLeft, BottomRight, CurrHeight), 0.0f);
                 v2 Right  = V2(CellSize.x, Lerp(CellSize.y, BottomRight, TopRight, CurrHeight));
                 v2 Top    = V2(Lerp(CellSize.x, TopLeft, TopRight, CurrHeight), CellSize.y);
                 v2 Left   = V2(0.0f, Lerp(CellSize.y, BottomLeft, TopLeft, CurrHeight));
-                StopMeasure(&State->Measures.TLerp);
+                StopMeasure(&State->Measures.Lerp);
                 
                 v2 const P = Hadamard(CellSize, V2((f32)x, (f32)y));
                 
-                StartMeasure(&State->Measures.TAdd);
+                StartMeasure(&State->Measures.Add);
                 switch (Sum) {
                     case 1: Add(&LineSegments, &LinePoints, P, Left  , Bottom);  break;
                     case 2: Add(&LineSegments, &LinePoints, P, Bottom, Right);   break;
@@ -307,7 +334,7 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                     case 13: Add(&LineSegments, &LinePoints, P, Right , Bottom); break;
                     case 14: Add(&LineSegments, &LinePoints, P, Bottom, Left);   break;
                 }
-                StopMeasure(&State->Measures.TAdd);
+                StopMeasure(&State->Measures.Add);
             }
         }
         
@@ -324,14 +351,12 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                 line_segment *CurrLine = &LineSegments.Data[LineSegmentIndex];
                 if (CurrLine->IsProcessed)  continue;
                 
-                StartMeasure(&State->Measures.TGetLineChain);
-                GetLineChain(&LineSegments, LinePoints, CurrLine, &CurrChain);
-                StopMeasure(&State->Measures.TGetLineChain);
+                GetLineChain(&LineSegments, LinePoints, CurrLine, &CurrChain, &State->Measures);
                 
                 u32 CurrChainCount = CurrChain.Used;
                 for (u32 LineChainIndex = 0; LineChainIndex < CurrChainCount; ++LineChainIndex) 
                 {
-                    StartMeasure(&State->Measures.TMergeLines);
+                    StartMeasure(&State->Measures.MergeLines);
                     
                     line_segment *Line = &CurrChain.Data[LineChainIndex];
                     
@@ -360,7 +385,7 @@ b32 MarchSquares(c_style_state *State, u32 const *DataPtr, f32_darray const *Hei
                         
                         Push(Indices, (u16)0xFFFF);
                     }
-                    StopMeasure(&State->Measures.TMergeLines);
+                    StopMeasure(&State->Measures.MergeLines);
                 }
             }
         }

@@ -25,13 +25,6 @@
 #ifndef f32_darray__h
 #define f32_darray__h
 
-#ifdef DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
-
-
 
 //
 // Structs

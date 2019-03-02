@@ -553,7 +553,12 @@ b32 CreateShader(directx_state *State, const char *PathAndName, vertex_shader *S
     
     // Open file
     FILE *ShaderFile;
-    fopen_s(&ShaderFile, PathAndName, "rb");
+    errno_t Error = fopen_s(&ShaderFile, PathAndName, "rb");
+    if (Error)
+    {
+        OutputDebugString("Failed to create shader!");
+        OutputDebugString(PathAndName);
+    }
     assert(ShaderFile);
     
     // Get size

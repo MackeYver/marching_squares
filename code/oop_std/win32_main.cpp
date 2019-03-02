@@ -39,13 +39,13 @@
 
 #ifdef DEBUG
 #define DebugPrint(...) {wchar_t cad[512]; swprintf_s(cad, sizeof(cad), __VA_ARGS__);  OutputDebugString(cad);}
-#include <assert.h>
+//#include <assert.h>
 #else
 #define DebugPrint(...)
-#define assert(x)
+//#define assert(x)
 #endif
 
-//#define WritePerfToFile
+#define SavePerfToFile
 
 
 //
@@ -462,17 +462,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
     }
     
     
-#ifdef WritePerfToFile
+#ifdef SavePerfToFile
     //
     // Open/create text files used as output for performance data
     //
     FILE *FilePerf = nullptr;
     CreateFile(&FilePerf, "..\\..\\perf\\perf_oop_std.txt");
-    WritePerfHeadersToFile(&FilePerf);
+    WritePerfHeadersToFile(FilePerf);
     
     FILE *FileData = nullptr;
     CreateFile(&FileData, "..\\..\\perf\\data_oop_std.txt");
-    WriteDataHeadersToFile(&FileData);
+    WriteDataHeadersToFile(FileData);
 #endif
     
     
@@ -519,30 +519,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
             int Result = MS.MarchSquares(Heights[Index]);
             assert(Result == MarchingSquares::Ok);
             
-#ifdef WritePerfToFile
-            for (u32 MeasureIndex = 0; MeasureIndex < 5; ++MeasureIndex)
+#ifdef SavePerfToFile
+            u32 Count = sizeof(time_measurements) / sizeof(time_measure);
+            for (u32 MeasureIndex = 0; MeasureIndex < Count; ++MeasureIndex)
             {
-                ConvertToMicroSeconds(&MS.Measures.Array[MeasureIndex], &Frequency);
-                WritePerfToFile(FilePerf, "oop_std", OPTIMIZATION, Index, i, 
+                WritePerfToFile(FilePerf, "oop_std", OPTIMIZATION, Index, 0, 
                                 TimingParentNames[MeasureIndex], 
                                 TimingNames[MeasureIndex], 
-                                MS.Measures.Array[MeasureIndex].TotalTime.QuadPart,
+                                MS.Measures.Array[MeasureIndex].TotalCycleCount,
                                 MS.Measures.Array[MeasureIndex].Count);
-                
             }
             
-            {
-                //
-                // Write info about data reduction
-                WriteDataToFile(FileData, "oop_std", OPTIMIZATION, Index, i,
-                                2*MS.LineCountAnte,
-                                MS.GetVertexCount());
-                
-                //
-                // Close files
-                fclose(FileData);
-                fclose(FilePerf);
-            }
+            //
+            // Write info about data reduction
+            WriteDataToFile(FileData, "oop_std", OPTIMIZATION, Index, 0,
+                            2*MS.LineCountAnte,
+                            MS.GetVertexCount());
 #endif
             
             {

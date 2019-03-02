@@ -28,12 +28,6 @@
 #include "Mathematics.h"
 #include <stdlib.h>
 
-#ifdef DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
-
 
 
 //
