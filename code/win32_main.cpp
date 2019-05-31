@@ -47,7 +47,7 @@
 #include "c_style.h"
 
 
-#define ShouldWritePerfToFile
+//#define ShouldWritePerfToFile
 
 //
 // Todo:
@@ -62,7 +62,8 @@
 //
 // Globals
 //
-static f32 const gBackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
+//static f32 const gBackgroundColour[] = {0.2f, 0.5f, 0.8f, 1.0f};
+static f32 const gBackgroundColour[] = {1.0f, 1.0f, 1.0f, 1.0f};
 static b32 gLabelRender = false;
 static u32 gLabelDistance = 1;
 static b32 gLabelCoordinates = false;
@@ -528,7 +529,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         LARGE_INTEGER Frequency;
         QueryPerformanceFrequency(&Frequency);
         
-        for (u32 Index = 1; Index < 2; ++Index)//gDataCount; ++Index)
+        for (u32 Index = 0; Index < gDataCount; ++Index)
         {
             State.CellSize = CellSizes[Index];
             State.CellCountX = CellCounts[2 * Index];
@@ -583,8 +584,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         }
         
         Free(&State);
+        
+#ifdef ShouldWritePerfToFile
         fclose(FileData);
         fclose(FilePerf);
+#endif
     }
     
     
@@ -685,7 +689,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lpCmdLine
         //
         // Render levels
         {
-            ShaderConstants.Colour = V3(1.0f, 1.0f, 1.0f);
+            ShaderConstants.Colour = V3(0.0f, 0.0f, 0.0f);
             ShaderConstants.Z = 0.0f;
             UpdateBuffer(&DirectXState, &ConstantBuffer, &ShaderConstants);
             

@@ -71,14 +71,14 @@ inline void Add(line_segment_darray *LineSegments,
     u32 Key = CalculateKey(LP.P);
     line_point_darray *DArray = Insert(Points, Key, &LP);
     
-    printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
+    //printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
     
     LP.P = P1;
     LP.LineIndex = Index;
     Key = CalculateKey(LP.P);
     DArray = Insert(Points, Key, &LP);
     
-    printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
+    //printf("%f, %f, %u\n", LP.P.x, LP.P.y, LP.LineIndex);
 }
 
 
