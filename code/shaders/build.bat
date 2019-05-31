@@ -6,8 +6,8 @@ IF NOT "%2"=="nc" (
 cls
 )
 
-IF NOT EXIST c:\developer\Marching_squares\build\shaders mkdir c:\developer\Marching_squares\build\shaders
-PUSHD c:\developer\Marching_squares\build\shaders
+IF NOT EXIST ..\..\build\shaders mkdir ..\..\build\shaders
+PUSHD ..\..\build\shaders
 
 IF EXIST BasicVertexShader.cso DEL /Q BasicVertexShader.cso
 IF EXIST BasicPixelShader.cso DEL /Q BasicPixelShader.cso

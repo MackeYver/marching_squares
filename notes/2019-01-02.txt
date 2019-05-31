@@ -2,7 +2,7 @@ Goal: the same as the other day: get some text rendered. In other words: debug t
 
 
 I did check the GPU calls via the Visual Studio's GPU debugger, but I saw no draw calls related 
-to Direct2D or DirectWrite as far as I could tell. So it seem like it there are draw calls 
+to Direct2D or DirectWrite as far as I could tell. So it seem like it there are no draw calls 
 being generated? I will try to get some debugging information from Direct2D or DirectWrite.
 What worries me a bit for the moment is that I migh be mixing different version with each other,
 perhaps this is no good?

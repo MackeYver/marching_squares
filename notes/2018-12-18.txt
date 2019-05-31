@@ -5,6 +5,7 @@ the simplest of simple workflows: writing the shader into a String literal and c
 logical solution for the future would be to setup a offline rendering workflow using FXC.exe. It
 seems to be quite easy actually (famous last words). But that is for later, now: stringified shaders!
 
+[some time later...]
 Now I have written, compiled and created the shaders. Nothing troublesome here really, actually not
 weird or complicated at all. Finally, let the rendering commence!
 
@@ -23,4 +24,3 @@ winding in DirectX is clockwise, but changing into that has no effect.
 
 The Graphics Debugger in Visual Studio seems to be not all bad, I just need to set some flags when
 I compile the shaders.
-

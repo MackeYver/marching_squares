@@ -1,6 +1,6 @@
 #Viewport
 --------
-D3d10_VIEWPORT is easy to setup and use: D3D10Device->SetViewports(n, *viewports); Doesn't 
+D3D10_VIEWPORT is easy to setup and use: D3D10Device->SetViewports(n, *viewports); Doesn't 
 affect the ClearRenderTargetView, but that does make a lot of sense, I guess that it will 
 only affect the output from the geometry stage/shader.
 
@@ -21,7 +21,7 @@ of constructors and a destructor, but it's unclear what the destructor does -- t
 help-page seems to be a bit broken.
 
 Using the D3D10_DEPTH_STENCIL_VIEW_DESC, I needed to set the Texture2D.MipSlice = 0. 
-The documentation for D3D10_DEPTH_STENCIL_VIEW_DESC is a bit.. lacking. In general, 
+The documentation for D3D10_DEPTH_STENCIL_VIEW_DESC is a bit... lacking. In general, 
 it seems to me that the quality of the DirectX 10 documentation is low, especially in
 comparison to DirectX 11 -- which seems to be almost decent.
 
@@ -35,7 +35,6 @@ Due to this, I first call Device->OMSetDepthStencilState(nullptr, 1) in order to
 the device to not use the DepthStencilState. First after that, I release the state.
 
 Phew, it is a lot of work to setup DirectX!
-
 
 
 

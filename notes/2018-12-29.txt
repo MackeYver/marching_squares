@@ -25,7 +25,7 @@ are not 3D. I need to change the vertex shader to accept v2's and output v3's (w
 Also, the topology needs to be changed from triangle list to line list.
 
 I did change the stride "calculation" to v2's but totally forgot about the InputLayout.
-This resultet in that the program rendered garbage, but it did also output a useful debug
+This resulted in that the program rendered garbage, but it did also output a useful debug
 message from DirectX: ("Input vertex slot has stride 8 but expected 12"...). That was
 kind of nice actually!
 

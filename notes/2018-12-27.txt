@@ -16,4 +16,4 @@ renders correctly:
 Summary:
 - The canonical view volume has coordinates: x E [-1.0, 1.0], y E [-1.0, 1.0], z E [0.0, 1.0] and the origin
   is at (0.0, 0.0, 0.0)
-- The default is that the vertices should be in clockwise order
+- The default winding of triangles is clockwise

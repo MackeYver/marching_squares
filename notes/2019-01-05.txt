@@ -15,7 +15,7 @@
 
 
 ##1. Fixing two bugs
-------------------
+-------------------
 
 ###1a. Window not rendering properly
 The rendering is done outside of the WM_PAINT message and I was expecting that the 
@@ -41,7 +41,7 @@ other message as well that's being sent.
 entering a modal loop, we're informed of this via WM_ENTERSIZEMOVE. At this point it is
 probably reasonably to pause the app and start a timer that will keep on rendering to 
 the window (we're not going through the usual render path). This timer will be killed in
-WM_EXITSIZEMOVE folloed by unpausing the app.
+WM_EXITSIZEMOVE followed by un-pausing the app.
 But then we need some way of rendering without going through the usual render path, it
 seems like this will have to wait until the DirectX code have been collapsed and moved
 into it's own thing.

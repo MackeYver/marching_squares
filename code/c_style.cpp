@@ -45,7 +45,7 @@
 //
 inline u32 CalculateKey(v2 const& P)
 {
-    // 3847 is a prime, choosen due to it being a bit larger than 3840 which is the width of 4k display.
+    // 3847 is a prime, choosen due to it being a bit larger than 3840 which is the width of a 4k display.
     // Admittedly a bit arbitrary, but we need to generate a key to use for sorting somehow and this may
     // be good enough.
     return 3847*(u32)P.y + (u32)P.x;

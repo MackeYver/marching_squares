@@ -20,9 +20,9 @@ the denominator is zero for some cases.
 
 This is weird, it shouldn't really happen -- in some cases the denominator will definitively be zero, but those 
 cases are not the ones that we use, so it shouldn't matter. 
-  After checking the code I found that I hade mistyped one of the cases; it used the wrong points and was thus
+  After checking the code I found that I had mistyped one of the cases; it used the wrong points and was thus
 using points in which one of the components was the result of an invalid division.
 
 According to IEEE 754, the floating point standard used, division with zero will be +INF or -INF for floats, so the
-program will not crash -- we don't need to guard against this and since we shouldn't use the result from those
+program will not crash -- we don't need to guard against this and since we won't use the result from those
 cases we should be alright.

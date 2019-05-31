@@ -83,10 +83,11 @@ Using Excel I could see some interesting stuff:
     - The key that resulted in zero line points were searched multiple times and it worked at
       some times but failed at others.
 
-It was weird that the results of searching the BST so arbitrary, surely there must an error in
-the Find() function? The data must be corrupted somehow? Turns out that the data was not 
-corrupted but a logic error in an if statement. Instead of recursively searching the left node
-if the search-key was smaller than the node's key, the search was sent to the right node.
+It was weird that the results of searching the BST failed so arbitrary, surely there must an 
+error in the Find() function? The data must be corrupted somehow? Turns out that the data was 
+not corrupted, but there were a logic error in an if statement. Instead of recursively 
+searching the left node if the search-key was smaller than the node's key, the search was sent 
+to the right node.
 
 This:
   if (Node->Key > Key)  Find(Node->Left);

@@ -34,10 +34,11 @@ didn't help. Perhaps I need to create a D3D 10.1 device after all? Unfortunately
 like I can safely assume that a user's hardware that support DX10 also supports DX10.1.
 Options:
   1. Use DX 10.1
-    - This will decrease the user base but I don't know how much
+    - This will decrease the user-base but I don't know by how much
 
   2. Switch to DX 11
-    - According to Steam's Hardware survey, this will decrease the user base with ~4%
+    - According to Steam's Hardware survey, this will decrease the user base with ~4 percentage
+      points.
 
   3. Check if the hardware support BGRA and if not, use another format
      - Added complexity (not much but still more complex than before)
@@ -88,9 +89,9 @@ end of the program.
 ----------------------
 Looking closely at the rendered window -- basically taking a screenshot and inspecting it mspaint,
 I could see that the size of window was wrong. I'm developing on a 4k monitor (the text rendering
-is amazing) and have set Windows to scale GUI and text by 150%. Since I set the size to be
-1024x1024, I expected the window's client area to have a size of 1024. But it was 50% bigger,
-which seemed to indicate that it was indeed scaled.
+is amazing) and I set Windows to scale GUI and text by 150%. Since I set the size to be 1024x1024, 
+I expected the window's client area to have a size of 1024. But it was 50% bigger, which seemed to 
+indicate that it was indeed scaled.
   Looking at the size of the buffer (1024x1024), and the reported size of the window (1024x1024),
 I suspected that Windows will be scaling when blitting to the window; i.e. the rendered content will
 probably be stretched.
@@ -99,7 +100,7 @@ Reading through the documentation, looking for some way to prevent Windows from 
 area, I stumbled upon references to "the manifest file". I don't believe that I've heard about them
 before this, so that was interesting. It was a very long time since I last did any development on
 Windows. Apparently, a manifest file contains information about the application and can be used in
-some different ways, on way is to embed the file in the exe.
+some different ways, one way is to embed the file in the exe.
 
 I chose to embed a hacked together manifest file into the exe file. I changed my build.bat so that
 the linker didn't produce any manifest file (/MANIFEST:NO, but it seemed like it actually didn't

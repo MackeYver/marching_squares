@@ -3,11 +3,11 @@ to using a std::vector owned by the class. Will probably go all-in on c++ and ma
 order to support data as both float and int).
 
 Added the capability to load data from a text file. Currently only supporting a text file with values seperated by
-a space. Will mayby enchance this and support a better format in the future. It will also be handled by the class
+a space. Will maybe enchance this and support a better format in the future. It will also be handled by the class
 itself rather than be done outside as it is now.
 
 Goals:
-- Load data from a file or from a in-memory POD array or std::vecor
+- Load data from a file or from an in-memory POD array or std::vector
 - Support float and int (template?) 
 
 
@@ -15,7 +15,7 @@ Re-structured the oop_std files in order to make them easier to read. Also imple
 the assignment operator to the _SDL class ("rule of three").
 Created a test .txt file to use for testing.
 
-Reading data from filed resulted in a size that was one greater than expected. Turns out there was a bug in the
+Reading data from files resulted in a size that was one greater than expected. Turns out there was a bug in the
 loop that read data from the file and pushed it to the vector. The file was not put in eof state until the
 program tried to read past the eof, thus we were adding the last data twice. This since the feof(file) was in the
 while statement and the adding vector inside the brackets, causing us to read and fail but still add to the

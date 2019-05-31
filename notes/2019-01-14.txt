@@ -37,7 +37,7 @@ In average, the Simplify() method reduces the vertex count with 29.3%, the index
 with 39.0% and reduces the number of line segments with 6.8%. Not too shabby!
 Well, I only used five test cases and they are a bit arbitrary, but there are a least
 two test cases with real world data, the cases 123x61 and 175x111 and they are 
-actually the cases in which the reduction is greatest. So yeah, this is definitely 
+actually the cases in which the data are reduced the most. So yeah, this is definitely 
 worth it.
 
 
