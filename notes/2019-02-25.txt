@@ -94,6 +94,10 @@ This:
 
 should be more like:
   if (Key < Node->key)  Find(Node->Left);
+  
+  Edit (2020-10-03): This makes no sense -- I must have typed the wrong thing herem since the 
+                     two lines above are equivalent? Unfortunately I can't remember the details
+		     but something was wrong with the logic in Find() and I fixed it. :)
 
 That change completely solved #2, now every search found at least one line_point. Yay! However,
 #1 was still a problem, for some weird reason we still tried to add a key = 0 many, many times!
